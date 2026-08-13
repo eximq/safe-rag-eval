@@ -1,0 +1,23 @@
+[project]
+name = "safe-rag-eval"
+version = "0.1.0"
+description = "Evaluation framework for hallucination and unauthorized action risk in RAG/agent LLM systems"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
