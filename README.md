@@ -44,31 +44,31 @@ safe-rag-eval/
 
 ## Setup
 
-# Clone repository
+**Clone repository**
 ```bash
 git clone https://github.com/eximq/safe-rag-eval.git
 cd safe-rag-eval
 ```
 
-# Create virtual environment
+**Create virtual environment**
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows (Git Bash): source .venv/Scripts/activate
 ```
 
-# Install dependencies
+**Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Quick Start
 
-# Run evaluation
+**Run evaluation**
 ```bash
 python -m src.runner.evaluate --config configs/scenarios/basic.yaml
 ```
 
-# Generate report
+**Generate report**
 ```bash
 python -m src.evaluation.report --output reports/results.json
 ```
