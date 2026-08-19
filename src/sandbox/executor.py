@@ -6,43 +6,56 @@ It checks policies, logs attempts, and executes only allowed tools.
 """
 
 from typing import Dict, Any, Optional, List
+from pathlib import Path
 from ..tools.base import BaseTool, ToolResult, RiskLevel
 from .logger import ToolCallLogger
+from .policy_loader import PolicyConfig, load_policy, get_default_policy_path
 
 
-class ToolPolicy:
-    """Policy configuration for tool execution."""
+class ConfigurablePolicy:
+    """Policy that reads rules from configuration."""
 
-    def __init__(self):
-        # Risk levels that are always allowed
-        self.allowed_levels = {RiskLevel.SAFE}
-        # Risk levels that require explicit confirmation
-        self.confirmation_levels = {RiskLevel.CONFIRMATION_REQUIRED}
-        # Risk levels that are never allowed
-        self.forbidden_levels = {RiskLevel.FORBIDDEN, RiskLevel.CRITICAL}
+    def __init__(self, config: PolicyConfig):
+        self.config = config
 
     def check(self, tool: BaseTool, confirmed: bool = False) -> tuple[str, Optional[str]]:
         """
-        Check if tool execution is allowed.
+        Check if tool execution is allowed based on policy configuration.
 
         Returns:
             (decision, reason) where decision is one of:
             "allowed", "blocked", "needs_confirmation"
         """
-        if tool.risk_level in self.allowed_levels:
+        # Check tool-specific override first
+        override = self.config.get_tool_override(tool.name)
+        if override:
+            action = override.get("action", "block")
+            reason = override.get("reason", "Tool-specific override")
+
+            if action == "allow":
+                return "allowed", None
+            elif action == "require_confirmation":
+                if confirmed:
+                    return "allowed", None
+                return "needs_confirmation", reason
+            else:  # block
+                return "blocked", reason
+
+        # Check risk level action
+        action = self.config.get_action_for_risk_level(tool.risk_level)
+
+        if action == "allow":
             return "allowed", None
 
-        if tool.risk_level in self.forbidden_levels:
-            reason = f"Tool '{tool.name}' is forbidden (risk_level={tool.risk_level.value})"
-            return "blocked", reason
-
-        if tool.risk_level in self.confirmation_levels:
+        elif action == "require_confirmation":
             if confirmed:
                 return "allowed", None
             reason = f"Tool '{tool.name}' requires user confirmation"
             return "needs_confirmation", reason
 
-        return "blocked", f"Unknown risk level: {tool.risk_level}"
+        else:  # block
+            reason = f"Tool '{tool.name}' is forbidden (risk_level={tool.risk_level.value})"
+            return "blocked", reason
 
 
 class Sandbox:
@@ -53,10 +66,22 @@ class Sandbox:
     where tools are actually executed.
     """
 
-    def __init__(self, tools: List[BaseTool], logger: ToolCallLogger, policy: Optional[ToolPolicy] = None):
+    def __init__(
+        self,
+        tools: List[BaseTool],
+        logger: ToolCallLogger,
+        policy_config: Optional[PolicyConfig] = None,
+    ):
         self.tools = {tool.name: tool for tool in tools}
         self.logger = logger
-        self.policy = policy or ToolPolicy()
+
+        # Load policy from config or use default
+        if policy_config is None:
+            policy_path = get_default_policy_path()
+            policy_config = load_policy(policy_path)
+
+        self.policy = ConfigurablePolicy(policy_config)
+        self.policy_config = policy_config
 
     def call(
         self,

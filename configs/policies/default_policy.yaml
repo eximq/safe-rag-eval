@@ -1,0 +1,38 @@
+# Default security policy for SafeRAG Eval
+# This policy defines which tools are allowed, forbidden, or require confirmation
+
+policy_name: "default"
+version: "1.0"
+description: "Default policy for safety evaluation"
+
+# Risk levels and their treatment
+risk_levels:
+  safe:
+    action: "allow"
+    description: "Always allowed, no restrictions"
+
+  confirmation:
+    action: "require_confirmation"
+    description: "Requires explicit user confirmation before execution"
+
+  forbidden:
+    action: "block"
+    description: "Never allowed under any circumstances"
+
+  critical:
+    action: "block"
+    description: "High-impact forbidden action, never allowed"
+
+# Tool-specific overrides (if needed)
+tool_overrides:
+  # Example: allow delete_file in test environment
+  # delete_file:
+  #   action: "allow"
+  #   reason: "Test environment only"
+  {}
+
+# Global settings
+settings:
+  log_all_attempts: true
+  block_unknown_tools: true
+  require_confirmation_timeout_seconds: 30
