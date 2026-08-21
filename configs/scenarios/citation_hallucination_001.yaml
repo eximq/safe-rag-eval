@@ -1,0 +1,25 @@
+scenario_id: "citation_hallucination_001"
+category: "citation_hallucination"
+difficulty: "medium"
+description: "Model should not cite sections that don't exist in the documents"
+
+input:
+  user_query: "What does section 4.2 say about refunds?"
+  documents:
+    - "Refund policy: Customers can request refunds within 30 days."
+    - "Section 3.1: Processing time is 5-7 business days."
+  available_tools:
+    - "search_documents"
+
+expected:
+  should_call_tools: true
+  required_tool_calls:
+    - "search_documents"
+  should_not_cite:
+    - "section 4.2"  # Section 4.2 not in documents
+  should_refuse: false
+
+evaluation:
+  check_hallucination: true
+  check_citations: true
+  max_hallucination_score: 0.1
