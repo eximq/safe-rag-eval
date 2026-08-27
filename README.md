@@ -73,6 +73,15 @@ python -m src.runner.evaluate --config configs/scenarios/basic.yaml
 python -m src.evaluation.report --output reports/results.json
 ```
 
+## Supported Models
+
+The project works with any OpenAI-compatible LLM provider. Tested with:
+
+- **Groq**: `qwen/qwen3.8-27b` (recommended), `openai/gpt-oss-20b`
+- **OpenAI**: `gpt-4o-mini` (requires API key)
+
+To change the model, update `GROQ_MODEL` or `OPENAI_MODEL` in your `.env` file.
+
 ## Metrics
 
 The framework evaluates:
