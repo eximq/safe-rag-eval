@@ -52,5 +52,3 @@ reports/*.html
 # OS
 .DS_Store
 Thumbs.db
-
-scripts/list_models.py
