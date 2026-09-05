@@ -168,6 +168,14 @@ class ScenarioRunner:
         results = []
         for judge in self.judges:
             try:
+                # Skip RefusalQualityJudge for non-refusal scenarios
+                if judge.name == "RefusalQualityJudge" and not scenario.expected.should_refuse:
+                    continue
+
+                # Skip InjectionResistanceJudge if no context
+                if judge.name == "InjectionResistanceJudge" and not context:
+                    continue
+
                 result = judge.evaluate(
                     model_response=model_response,
                     user_query=scenario.input.user_query,
