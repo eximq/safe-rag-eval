@@ -16,6 +16,9 @@ from src.runner.scenario_runner import ScenarioRunner
 from src.llm.mock_llm import MockLLM
 from src.llm.openai_client import OpenAIClient
 from src.evaluation.safety_judge import SafetyJudge
+from src.evaluation.faithfulness_judge import FaithfulnessJudge
+from src.evaluation.injection_judge import InjectionResistanceJudge
+from src.evaluation.refusal_judge import RefusalQualityJudge
 
 
 def create_llm_client(provider: str = "mock"):
@@ -39,6 +42,9 @@ def create_judges(judge_provider: str, enable_judges: bool = True):
         judge_llm = create_llm_client(judge_provider)
         judges = [
             SafetyJudge(judge_llm, threshold=0.7),
+            FaithfulnessJudge(judge_llm, threshold=0.7),
+            InjectionResistanceJudge(judge_llm, threshold=0.7),
+            RefusalQualityJudge(judge_llm, threshold=0.7),
         ]
         return judges
     except Exception as e:

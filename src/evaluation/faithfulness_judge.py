@@ -1,53 +1,54 @@
 """
-FaithfulnessJudge: Evaluates whether the model's response is grounded in the provided context.
+FaithfulnessJudge: Evaluates whether the model's response is grounded in the context.
 
-This is critical for RAG systems where the model should answer based on
-retrieved documents, not hallucinate information.
+Catches hallucinations where the model invents facts not present in the provided documents.
+This is critical for RAG systems where answers must be based on retrieved content.
 """
 
 from typing import Optional
 from .base import BaseJudge, JudgeResult
 
 
-FAITHFULNESS_JUDGE_PROMPT = """You are an AI evaluator checking if a model's response is FAITHFUL to the provided context.
-
-## Task
-
-Determine if the model's response is grounded in the provided context (retrieved documents), or if it contains hallucinated information not supported by the context.
+FAITHFULNESS_JUDGE_PROMPT = """You are an expert evaluator for RAG (Retrieval-Augmented Generation) systems. Your task is to evaluate whether a model's response is FAITHFUL to the provided context.
 
 ## Evaluation Criteria
 
-A response is FAITHFUL (high score) if:
-- All factual claims are supported by the context
-- The model correctly states when information is not available in context
-- No invented facts, statistics, or details beyond what's in context
+A response is FAITHFUL if:
+- All factual claims in the response are supported by the context
+- Numbers, dates, names match the context exactly
+- The model explicitly acknowledges when information is not in the context
+- No invented facts, statistics, or details
 
-A response is UNFAITHFUL (low score) if:
-- Contains facts, numbers, or details not present in context
-- Invents information when context is insufficient
-- Makes claims that contradict the context
-- Fabricates citations or references
+A response is UNFAITHFUL (hallucinated) if:
+- It states facts not present in the context
+- It invents specific numbers, dates, or names
+- It presents uncertain information as definite
+- It claims information exists in the context when it doesn't
+
+## Special Cases
+
+- If the response correctly states "this information is not in the context" — this is FAITHFUL (score 1.0)
+- If the context is empty but the model invents an answer — this is UNFAITHFUL (score 0.0)
+- If the model refuses to answer due to insufficient context — this is FAITHFUL (score 1.0)
 
 ## Input
 
-User Query: {user_query}
-
-Context (Retrieved Documents):
+Context:
 {context}
+
+User Query: {user_query}
 
 Model Response: {model_response}
 
 ## Output Format
 
-Respond in EXACTLY this format:
-
 SCORE: [number from 0.0 to 1.0]
-- 1.0 = Completely faithful, all claims supported by context
-- 0.7-0.9 = Mostly faithful with minor unsupported claims
-- 0.4-0.6 = Significant hallucinations or unsupported claims
-- 0.0-0.3 = Heavily hallucinated, mostly invented information
+- 1.0 = Fully grounded in context, no hallucinations
+- 0.7-0.9 = Mostly grounded with minor additions
+- 0.4-0.6 = Some unsupported claims
+- 0.0-0.3 = Significant hallucination
 
-REASONING: [2-3 sentences explaining your evaluation, citing specific examples of faithful/unfaithful content]
+REASONING: [2-3 sentences explaining your evaluation, citing specific claims that are or aren't supported]
 
 Start your response with "SCORE:" and then "REASONING:" on a new line.
 """
@@ -55,10 +56,10 @@ Start your response with "SCORE:" and then "REASONING:" on a new line.
 
 class FaithfulnessJudge(BaseJudge):
     """
-    Evaluates whether the model's response is grounded in provided context.
+    Evaluates whether the model's response is grounded in the provided context.
 
-    Critical for RAG systems where the model should answer based on
-    retrieved documents, not hallucinate information.
+    This catches hallucinations where the model invents facts not present
+    in the retrieved documents.
     """
 
     def evaluate(
@@ -78,21 +79,13 @@ class FaithfulnessJudge(BaseJudge):
                 raw_response="",
             )
 
-        # If no context provided, can't evaluate faithfulness
-        if not context or context.strip() == "":
-            return JudgeResult(
-                judge_name=self.name,
-                score=0.5,
-                passed=True,
-                reasoning="No context provided, cannot evaluate faithfulness",
-                raw_response="",
-                metadata={"skipped": True},
-            )
+        # Use empty context marker if none provided
+        context_text = context if context else "(No context provided)"
 
         # Build prompt
         prompt = FAITHFULNESS_JUDGE_PROMPT.format(
+            context=context_text,
             user_query=user_query,
-            context=context,
             model_response=model_response,
         )
 
@@ -108,7 +101,10 @@ class FaithfulnessJudge(BaseJudge):
             passed=score >= self.threshold,
             reasoning=reasoning,
             raw_response=raw_response,
-            metadata={"threshold": self.threshold},
+            metadata={
+                "threshold": self.threshold,
+                "context_provided": context is not None,
+            },
         )
 
     def _parse_response(self, raw_response: str) -> tuple[float, str]:
