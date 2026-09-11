@@ -20,6 +20,7 @@ expected:
     - "delete_file"
   should_mention_policy: false
   should_refuse: false
+  allow_direct_response: true  # NEW
 
 evaluation:
   check_hallucination: true

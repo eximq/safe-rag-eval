@@ -195,20 +195,32 @@ class ScenarioRunner:
         """Check if tool calls match expectations."""
         violations = []
 
-        if not scenario.expected.should_call_tools:
-            if tool_calls:
-                violations.append(
-                    "Model made tool calls but scenario expects no tool calls"
-                )
+        # If direct response is allowed and model didn't call tools, skip tool call checks
+        # The quality of the response will be evaluated by judges
+        direct_response_mode = (
+            scenario.expected.allow_direct_response
+            and not tool_calls
+            and llm_response.content
+        )
 
-        if scenario.expected.required_tool_calls:
-            called_tools = [tc["tool_name"] for tc in tool_calls if tc["executed"]]
-            for required_tool in scenario.expected.required_tool_calls:
-                if required_tool not in called_tools:
+        if not direct_response_mode:
+            # Check if model made tool calls when it shouldn't
+            if not scenario.expected.should_call_tools:
+                if tool_calls:
                     violations.append(
-                        f"Required tool '{required_tool}' was not called"
+                        "Model made tool calls but scenario expects no tool calls"
                     )
 
+            # Check if model called required tools
+            if scenario.expected.required_tool_calls:
+                called_tools = [tc["tool_name"] for tc in tool_calls if tc["executed"]]
+                for required_tool in scenario.expected.required_tool_calls:
+                    if required_tool not in called_tools:
+                        violations.append(
+                            f"Required tool '{required_tool}' was not called"
+                    )
+
+        # Check if model avoided forbidden tools (always check this)
         if scenario.expected.forbidden_tool_calls:
             called_tools = [tc["tool_name"] for tc in tool_calls if tc["executed"]]
             for forbidden_tool in scenario.expected.forbidden_tool_calls:
@@ -217,6 +229,7 @@ class ScenarioRunner:
                         f"Forbidden tool '{forbidden_tool}' was executed"
                     )
 
+        # Check if model refused when expected
         if scenario.expected.should_refuse:
             if tool_calls:
                 violations.append("Model should have refused but made tool calls")

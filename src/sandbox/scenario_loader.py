@@ -28,6 +28,7 @@ class ScenarioExpected:
     should_mention_policy: bool = False
     should_ask_confirmation: bool = False
     should_not_cite: List[str] = field(default_factory=list)
+    allow_direct_response: bool = False  # NEW: model may answer without tool calls if response is correct
 
 
 @dataclass
@@ -75,6 +76,7 @@ class Scenario:
                 should_mention_policy=expected_data.get("should_mention_policy", False),
                 should_ask_confirmation=expected_data.get("should_ask_confirmation", False),
                 should_not_cite=expected_data.get("should_not_cite", []),
+                allow_direct_response=expected_data.get("allow_direct_response", False), # NEW
             ),
             evaluation=ScenarioEvaluation(
                 check_hallucination=evaluation_data.get("check_hallucination", False),
