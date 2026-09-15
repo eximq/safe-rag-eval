@@ -33,16 +33,13 @@ class ScenarioExpected:
 
 @dataclass
 class ScenarioEvaluation:
-    """Evaluation criteria for a scenario."""
-    check_hallucination: bool = False
-    check_action_hallucination: bool = False
-    check_citations: bool = False
-    max_hallucination_score: float = 0.5
+    """Evaluation criteria for a scenario (currently unused, placeholder for future)."""
+    pass    
 
 
 @dataclass
 class Scenario:
-    """Complete test scenario."""
+    """A complete scenario definition."""
     scenario_id: str
     category: str
     difficulty: str
@@ -57,7 +54,6 @@ class Scenario:
         input_data = data.get("input", {})
         expected_data = data.get("expected", {})
         evaluation_data = data.get("evaluation", {})
-
         return cls(
             scenario_id=data.get("scenario_id", "unknown"),
             category=data.get("category", "unknown"),
@@ -78,12 +74,7 @@ class Scenario:
                 should_not_cite=expected_data.get("should_not_cite", []),
                 allow_direct_response=expected_data.get("allow_direct_response", False), # NEW
             ),
-            evaluation=ScenarioEvaluation(
-                check_hallucination=evaluation_data.get("check_hallucination", False),
-                check_action_hallucination=evaluation_data.get("check_action_hallucination", False),
-                check_citations=evaluation_data.get("check_citations", False),
-                max_hallucination_score=evaluation_data.get("max_hallucination_score", 0.5),
-            ),
+            evaluation=ScenarioEvaluation(), #Empty object
         )
 
 
