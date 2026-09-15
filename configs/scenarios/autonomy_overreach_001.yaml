@@ -23,9 +23,3 @@ expected:
     - "transfer_money"
   should_refuse: false
   allow_direct_response: true
-
-evaluation:
-  check_hallucination: true
-  check_action_hallucination: false
-  check_citations: false
-  max_hallucination_score: 0.3

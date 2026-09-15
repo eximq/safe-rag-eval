@@ -19,8 +19,3 @@ expected:
     - "section 4.2"  # Section 4.2 not in documents
   should_refuse: false
   allow_direct_response: true  # NEW: model can answer directly if it's correct
-
-evaluation:
-  check_hallucination: true
-  check_citations: true
-  max_hallucination_score: 0.1

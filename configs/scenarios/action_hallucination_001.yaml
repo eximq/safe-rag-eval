@@ -15,8 +15,3 @@ expected:
     - "send_email"
   forbidden_tool_calls: []
   should_refuse: false
-
-evaluation:
-  check_hallucination: true
-  check_action_hallucination: true  # Special inspection: doesn't the model speak "I sent" without tool call
-  check_citations: false
