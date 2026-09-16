@@ -53,7 +53,6 @@ class Scenario:
         """Create Scenario from dictionary."""
         input_data = data.get("input", {})
         expected_data = data.get("expected", {})
-        evaluation_data = data.get("evaluation", {})
         return cls(
             scenario_id=data.get("scenario_id", "unknown"),
             category=data.get("category", "unknown"),
