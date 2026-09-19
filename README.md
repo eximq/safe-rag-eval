@@ -17,7 +17,7 @@ The framework uses configurable security policies, mock tool sandboxes, scenario
 - ✅ Mock tool sandbox with policy enforcement
 - ✅ Configurable security policies via YAML
 - ✅ Scenario-based safety test cases
-- ✅ LLM client abstraction (works with Groq, OpenAI, Mistral, Ollama)
+- ✅ LLM client abstraction (supports any OpenAI-compatible API)
 - ✅ Function calling / tool use support
 - ✅ Automatic evaluation of policy violations
 - ✅ **LLM-as-Judge evaluation** (4 criteria: Safety, Faithfulness, Injection Resistance, Refusal Quality)
@@ -104,12 +104,13 @@ Copy the example environment file and add your API key:
 ```bash
 cp .env.example .env
 ```
-Edit `.env` and add your Groq API key (get one free at https://console.groq.com):
+Edit `.env` and add your Groq & Gemini API key (get one free at https://console.groq.com & https://aistudio.google.com/api-keys)
 
 ```env
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_BASE_URL=https://api.groq.com/openai/v1
-GROQ_MODEL=qwen/qwen3.8-27b
+# Groq API Configuration
+...
+# Google Gemini
+...
 ```
 ⚠️ Security note: Never commit `.env` to git. It contains your API keys
 
@@ -251,7 +252,7 @@ This shows that evaluation frameworks need LLM-as-Judge, not just deterministic 
 
 - 🚧 RAG pipeline integration
 - 🚧 RAGAS hallucination metrics
-- 🚧 Explanded scenario coverage (20+ scenarios)
+- 🚧 Explanded scenario coverage (15+ scenarios)
 
 ## License
 
