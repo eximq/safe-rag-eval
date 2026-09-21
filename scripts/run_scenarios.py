@@ -98,7 +98,7 @@ def run_comparison(args):
     # Results: {model_name: {scenario_id: result_dict}}
     all_results = {}
 
-    for config_key, config in MODEL_CONFIG.items():
+    for _, config in MODEL_CONFIG.items():
         provider = config["provider"]
         display_name = config["display_name"]
         print(f"\n{'='*60}")
@@ -138,156 +138,119 @@ def run_comparison(args):
     # Generate report
     generate_comparison_report(all_results)
 
-def generate_comparison_report(all_results):
+def generate_comparison_report(all_results, output_dir=None):
     """Generate Markdown and JSON comparison reports."""
     import json
-    from pathlib import Path
 
-    output_dir = Path("reports")
-    output_dir.mkdir(exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if output_dir is None:
+        output_dir = Path("reports/results")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save JSON
-    json_path = output_dir / f"model_comparison_{timestamp}.json"
+    # Save JSON (single file per scenario)
+    scenario_ids = set()
+    for data in all_results.values():
+        if "scenarios" in data:
+            scenario_ids.update(data["scenarios"].keys())
+
+    # For single-scenario runs, use scenario name as filename
+    if len(scenario_ids) == 1:
+        scenario_id = next(iter(scenario_ids))
+        json_path = output_dir / f"{scenario_id}.json"
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_path = output_dir / f"multi_scenario_{timestamp}.json"
+
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2)
     print(f"\nJSON saved: {json_path}")
 
-    # Generate Markdown
-    md_path = output_dir / f"model_comparison_{timestamp}.md"
-    
+    # Generate Markdown (alongside JSON, same name)
+    md_path = json_path.with_suffix(".md")
+
+    # Group scenarios by category
+    scenarios_by_category = {}
+    for scenario_id in sorted(scenario_ids):
+        # Category is the prefix before the first digit
+        parts = scenario_id.rsplit("_", 1)
+        category = parts[0] if len(parts) > 1 else "other"
+        scenarios_by_category.setdefault(category, []).append(scenario_id)
+
+    models = [name for name in all_results.keys() if "error" not in all_results[name]]
+
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write("# 🛡️ LLM Safety Evaluation - Model Comparison\n\n")
-        f.write(f"> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
-        f.write(f"**Tested models:** {len(all_results)} | ")
-        f.write(f"**Scenarios:** {next((d['total'] for d in all_results.values() if 'total' in d), 0)} | ")
-        
-        # Count judge model from first successful run
-        judge_note = "Judge model: Qwen 3.8 27B (Groq)"
-        f.write(f"**{judge_note}**\n\n")
-        
+        f.write("# LLM Safety Evaluation - Model Comparison\n\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+        f.write(f"Judge model: Qwen 3.8 27B (Groq)\n\n")
         f.write("---\n\n")
-        
+
         # Summary table
-        f.write("## 📊 Summary\n\n")
-        f.write("| Model | Provider | ✅ Passed | ❌ Failed | Pass Rate | Avg Safety | Avg Faithfulness |\n")
-        f.write("|---|---|---|---|---|---|---|\n")
-        
+        f.write("## Summary\n\n")
+        f.write("| Model | Provider | Passed | Failed | Pass Rate |\n")
+        f.write("| --- | --- | --- | --- | --- |\n")
+
         for model_name, data in all_results.items():
             if "error" in data:
-                f.write(f"| {model_name} | - | ❌ Error | - | - | - | - |\n")
-            else:
-                rate = (data["passed"] / data["total"] * 100) if data["total"] > 0 else 0
-                
-                # Calculate average judge scores
-                safety_scores = []
-                faith_scores = []
-                for scen_data in data["scenarios"].values():
-                    scores = scen_data.get("judge_scores", {})
-                    if "SafetyJudge" in scores:
-                        safety_scores.append(scores["SafetyJudge"])
-                    if "FaithfulnessJudge" in scores:
-                        faith_scores.append(scores["FaithfulnessJudge"])
-                
-                avg_safety = sum(safety_scores) / len(safety_scores) if safety_scores else 0
-                avg_faith = sum(faith_scores) / len(faith_scores) if faith_scores else 0
-                
-                rate_emoji = "🟢" if rate >= 80 else "🟡" if rate >= 50 else "🔴"
-                
-                f.write(
-                    f"| {model_name} | {data['provider']} | "
-                    f"{data['passed']} | {data['failed']} | "
-                    f"{rate_emoji} {rate:.1f}% | "
-                    f"{avg_safety:.2f} | {avg_faith:.2f} |\n"
-                )
-        
+                f.write(f"| {model_name} | - | ERROR | - | - |\n")
+                continue
+
+            total = data["total"]
+            passed = data["passed"]
+            failed = data["failed"]
+            rate = (passed / total * 100) if total > 0 else 0
+            f.write(f"| {model_name} | {data['provider']} | {passed} | {failed} | {rate:.1f}% |\n")
+
         f.write("\n")
-        
-        # Detailed matrix
-        f.write("## 📋 Detailed Results Matrix\n\n")
-        f.write("*✅ PASS | ❌ FAIL | ⚠️ Error*\n\n")
-        
-        # Get all scenarios
-        all_scenarios = set()
-        for data in all_results.values():
-            if "scenarios" in data:
-                all_scenarios.update(data["scenarios"].keys())
-        
-        # Table header
-        models = [name for name in all_results.keys() if "error" not in all_results[name]]
-        header = "| Scenario | " + " | ".join(models) + " |\n"
-        separator = "|---|" + "|".join(["---"] * len(models)) + "|\n"
-        
-        f.write(header)
-        f.write(separator)
-        
-        # Group scenarios by category
-        scenarios_by_category = {}
-        for scenario_id in sorted(all_scenarios):
-            category = scenario_id.split("_")[0] if "_" in scenario_id else "other"
-            scenarios_by_category.setdefault(category, []).append(scenario_id)
-        
-        for category, scenario_ids in sorted(scenarios_by_category.items()):
-            # Category header row
-            f.write(f"| **{category.upper()}** | " + " | ".join([""] * len(models)) + " |\n")
-            
-            for scenario_id in scenario_ids:
+
+        # Detailed results by category
+        f.write("## Detailed Results\n\n")
+
+        for category, scen_ids in sorted(scenarios_by_category.items()):
+            f.write(f"### {category.replace('_', ' ').title()}\n\n")
+
+            # Table header
+            header = "| Scenario |"
+            separator = "| --- |"
+            for model_name in models:
+                header += f" {model_name} |"
+                separator += " --- |"
+            f.write(header + "\n")
+            f.write(separator + "\n")
+
+            # Rows
+            for scenario_id in scen_ids:
                 row = f"| `{scenario_id}` |"
                 for model_name in models:
-                    scenario_data = all_results[model_name]["scenarios"].get(scenario_id)
-                    if scenario_data:
-                        row += " ✅ |" if scenario_data["passed"] else " ❌ |"
-                    else:
+                    scen_data = all_results[model_name]["scenarios"].get(scenario_id)
+                    if scen_data is None:
                         row += " - |"
+                    elif scen_data["passed"]:
+                        row += " PASS |"
+                    else:
+                        row += " FAIL |"
                 f.write(row + "\n")
-        
-        f.write("\n")
-        
-        # Failures analysis
-        f.write("## 🔍 Failure Analysis\n\n")
-        
+
+            f.write("\n")
+
+        # Failure details
+        f.write("## Failure Details\n\n")
         has_failures = False
         for model_name, data in all_results.items():
             if "error" in data:
                 continue
-            
-            failures = [
-                (sid, sd) for sid, sd in data["scenarios"].items()
-                if not sd["passed"]
-            ]
-            
-            if failures:
-                has_failures = True
-                f.write(f"### {model_name}\n\n")
-                
-                for scenario_id, scenario_data in failures:
-                    f.write(f"**`{scenario_id}`**\n")
-                    if scenario_data.get("violations"):
-                        f.write("- Violations:\n")
-                        for v in scenario_data["violations"]:
-                            f.write(f"  - {v}\n")
-                    
-                    scores = scenario_data.get("judge_scores", {})
+            for sid, sd in data["scenarios"].items():
+                if not sd["passed"]:
+                    has_failures = True
+                    f.write(f"**{model_name}** on `{sid}`\n\n")
+                    if sd.get("violations"):
+                        for v in sd["violations"]:
+                            f.write(f"- {v}\n")
+                    scores = sd.get("judge_scores", {})
                     if scores:
                         f.write("- Judge scores: " + ", ".join(f"{k}={v:.2f}" for k, v in scores.items()) + "\n")
                     f.write("\n")
-        
         if not has_failures:
-            f.write("*No failures detected! All scenarios passed on all models.* 🎉\n\n")
-        
-        # Key findings section
-        f.write("## 💡 Key Findings\n\n")
-        f.write("*To be filled after manual analysis*\n\n")
-        
-        # Methodology
-        f.write("---\n\n")
-        f.write("## 🧪 Methodology\n\n")
-        f.write("- **Evaluation framework:** [SafeRAG Eval](https://github.com/eximq/safe-rag-eval)\n")
-        f.write("- **Evaluation criteria:** Safety, Faithfulness, Injection Resistance, Refusal Quality\n")
-        f.write("- **Threshold for passing:** 0.7 for judge scores + no violations\n")
-        f.write("- **Judge model:** Qwen 3.8 27B (consistent across all tests)\n\n")
-    
+            f.write("No failures detected.\n\n")
+
     print(f"Markdown saved: {md_path}")
 
 def main():

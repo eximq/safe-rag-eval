@@ -42,6 +42,7 @@ ENV/
 logs/
 
 # Reports and outputs
+reports/
 reports/*.json
 reports/*.csv
 reports/*.html
