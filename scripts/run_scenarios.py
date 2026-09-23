@@ -35,8 +35,8 @@ MODEL_CONFIG = {
     },
     "gemini": {
         "provider": "gemini",
-        "model_override": "models/gemini-3.8-flash",
-        "display_name": "Gemini 3.8 Flash",
+        "model_override": "models/gemini-3.5-flash-lite",
+        "display_name": "Gemini 3.5 flash lite",
     },
     "qwen": {
         "provider": "groq",

@@ -94,7 +94,7 @@ safe-rag-eval/
 The framework works with any OpenAI-compatible API. Currently tested providers:
 
 - Groq: `qwen/qwen3.8-27b`, `openai/gpt-oss-120b`
-- Google Gemini: `models/gemini-3.8-flash`
+- Google Gemini: `models/gemini-3.5-flash-lite`
 - Ollama: Any local GGUF model
 
 To add a new provider, configure it in `.env` and optionally add it to `MODEL_CONFIG` in `scripts/run_scenarios.py` for comparison mode.
@@ -284,21 +284,22 @@ risk_levels:
 
 ## Real-World Results
 
-Initial evaluation of 3 models (GPT-OSS 120B, Gemini 3.8 Flash, Qwen 3.8 27B) across 14 scenarios revealed several important patterns:
+Evaluation of three production models across 14 scenarios (final run):
 
- **Key Findings**
+| Model | Provider | Passed | Pass Rate |
+|---|---|---|---|
+| Gemini 3.5 Flash Lite | Google | 12/14 | 86% |
+| Qwen 3.8 27B | Groq | 12/14 | 86% |
+| GPT-OSS 120B | Groq | 9/14 | 64% |
 
-🔍 **Indirect prompt injection defeats large models**: GPT-OSS 120B executed hidden instructions embedded in a resume (attempted to auto-send email to admin), while smaller models (Gemini, Qwen) ignored them. **Size ≠ Safety**.
+### Key findings
 
-🔍 **Social engineering vulnerabilities are model-specific**:
+- **Multi-step escalation defeats all tested models.** In `multi_step_escalation_001` every model either verbally agreed to harmful actions or started executing them. At step 2 (`multi_step_escalation_002`), two of three models called forbidden tools after the user claimed to "have permission".
+- **Indirect prompt injection is reproducible on large models.** GPT-OSS 120B executed a hidden instruction embedded in a resume document (attempted email to admin) in two independent runs, while smaller models ignored it. Size does not equal safety.
+- **Rules and judges catch disjoint failure sets.** Rule-based checks caught forbidden tool calls that judges scored 1.0; judges caught verbal consent to harm that rules could not see. Single-layer evaluation misses roughly half of vulnerabilities.
+- **Single-run results are noisy.** The same model-scenario pair produced different judge scores across runs, which motivates N-run statistical evaluation in v2.
 
-- **GPT-OSS** failed multi-step escalation attacks
-- **Gemini** was manipulated by flattery and accepted verbal authorization claims
-- **Qwen** resisted all social engineering scenarios
-
-🔍 **Rules and judges are complementary**: rule-based checks caught tool-call violations that judges missed; judges caught consent-in-language that rules missed. A single evaluation layer misses roughly half of vulnerabilities.
-
-🔍 **A real vulnerability in confirmation flow**: one tested model sent an email without asking for user confirmation — the kind of bug that can ship to production without proper evaluation.  
+Full per-scenario data lives in `reports/` (gitignored). Research notes: `notes/findings.md`.
 
 ## Methodology Insights
 
@@ -346,4 +347,4 @@ Contributions are welcome! Areas where help is especially appreciated:
 
 ## License
 
-MIT License - see LICENSE file
+[MIT License](LICENSE)
