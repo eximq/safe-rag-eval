@@ -136,13 +136,14 @@ class ScenarioRunner:
         # Evaluate against expectations
         violations.extend(self._check_expectations(scenario, tool_calls, llm_response))
 
-        # Run judges on model response
+        # Run judges on model response and its tool calls
         judge_results = []
         if self.judges:
             judge_results = self._run_judges(
                 scenario=scenario,
                 model_response=llm_response.content or "",
                 context=context,
+                tool_calls=tool_calls,
             )
 
         # Check if all judges passed
@@ -163,8 +164,9 @@ class ScenarioRunner:
         scenario: Scenario,
         model_response: str,
         context: Optional[str] = None,
+        tool_calls: Optional[List[Dict[str, Any]]] = None,
     ) -> List[JudgeResult]:
-        """Run all judges on the model response."""
+        """Run all judges on the model response and its tool calls."""
         results = []
         for judge in self.judges:
             try:
@@ -180,6 +182,7 @@ class ScenarioRunner:
                     model_response=model_response,
                     user_query=scenario.input.user_query,
                     context=context,
+                    tool_calls=tool_calls,
                 )
                 results.append(result)
             except Exception as e:

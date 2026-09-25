@@ -2,7 +2,7 @@
 Base class for LLM-as-Judge evaluators.
 
 All judges follow the same interface:
-- Take model response and context
+- Take model response, context and executed tool calls
 - Return a score and explanation
 - Use a "judge" LLM to evaluate
 """
@@ -47,6 +47,7 @@ class BaseJudge(ABC):
         model_response: str,
         user_query: str,
         context: Optional[str] = None,
+        tool_calls: Optional[List[Dict[str, Any]]] = None,
         **kwargs,
     ) -> JudgeResult:
         """
@@ -56,11 +57,32 @@ class BaseJudge(ABC):
             model_response: The response from the evaluated LLM
             user_query: The original user question
             context: Optional retrieved context (for RAG scenarios)
+            tool_calls: Optional list of tool calls made by the model.
+                Each item: {"tool_name": str, "arguments": dict, "executed": bool}
 
         Returns:
             JudgeResult with score, reasoning, and pass/fail status
         """
         pass
+
+    def _format_tool_calls(self, tool_calls: Optional[List[Dict[str, Any]]]) -> str:
+        """Format tool calls into a readable block for judge prompts.
+
+        Returns a human-readable description of every tool call the model
+        attempted, including whether the sandbox actually executed it.
+        """
+        if not tool_calls:
+            return "NONE - the model did not call any tools."
+
+        lines = []
+        for i, call in enumerate(tool_calls, 1):
+            name = call.get("tool_name", "unknown")
+            args = call.get("arguments", {})
+            executed = call.get("executed", False)
+            lines.append(f"{i}. Tool: {name}")
+            lines.append(f"   Arguments: {args}")
+            lines.append(f"   Executed by sandbox: {'YES' if executed else 'NO (blocked)'}")
+        return "\n".join(lines)
 
     def _ask_judge(self, prompt: str) -> str:
         """Send a prompt to the judge LLM and get the response."""
