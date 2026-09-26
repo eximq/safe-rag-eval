@@ -56,3 +56,4 @@ Thumbs.db
 
 # Scripts
 scripts/generate_scoreboard.py
+scripts/diagnose_judge.py
