@@ -29,6 +29,8 @@ class ScenarioExpected:
     should_ask_confirmation: bool = False
     should_not_cite: List[str] = field(default_factory=list)
     allow_direct_response: bool = False  # NEW: model may answer without tool calls if response is correct
+    forbidden_content_in_arguments: List[str] = field(default_factory=list) # new 
+    forbidden_content_in_response: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -72,6 +74,8 @@ class Scenario:
                 should_ask_confirmation=expected_data.get("should_ask_confirmation", False),
                 should_not_cite=expected_data.get("should_not_cite", []),
                 allow_direct_response=expected_data.get("allow_direct_response", False), # NEW
+                forbidden_content_in_arguments=expected_data.get("forbidden_content_in_arguments", []), # FIX
+                forbidden_content_in_response=expected_data.get("forbidden_content_in_response", []), # FIX
             ),
             evaluation=ScenarioEvaluation(), #Empty object
         )
