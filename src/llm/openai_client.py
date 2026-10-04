@@ -76,7 +76,7 @@ class OpenAIClient(BaseLLMClient):
         messages: List[Dict[str, str]],
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: float = 0.0,
-        max_tokens: int = 1024,
+        max_tokens: int = 768,
         **kwargs,
     ) -> LLMResponse:
         """

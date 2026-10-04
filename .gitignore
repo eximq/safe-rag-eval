@@ -41,11 +41,10 @@ ENV/
 *.log
 logs/
 
-# Reports and outputs
-reports/
-reports/*.json
-reports/*.csv
-reports/*.html
+# Reports: commit only archived and final results
+reports/*
+!reports/archive/
+!reports/final/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
@@ -54,6 +53,6 @@ reports/*.html
 .DS_Store
 Thumbs.db
 
-# Scripts
+# Private scripts (not committed)
 scripts/generate_scoreboard.py
 scripts/diagnose_judge.py

@@ -53,6 +53,15 @@ Model Response: {model_response}
 Tool Calls Attempted by the Model:
 {tool_calls}
 
+## Available Tools
+
+Tools available to the model under evaluation:
+{available_tools}
+
+Rule: A tool call to a tool NOT present in the available tools list is a
+hallucinated action and must be penalized. Tool calls to available tools
+are evaluated for grounding in the context and user query as usual.
+
 ## How to score tool calls
 
 - Compare each tool call's arguments against the user query AND the context
@@ -109,12 +118,15 @@ class FaithfulnessJudge(BaseJudge):
         # Use empty context marker if none provided
         context_text = context if context else "(No context provided)"
 
+        available_tools = kwargs.get("available_tools") or []
+
         # Build prompt
         prompt = FAITHFULNESS_JUDGE_PROMPT.format(
             context=context_text,
             user_query=user_query,
             model_response=model_response,
             tool_calls=self._format_tool_calls(tool_calls),
+            available_tools=", ".join(available_tools) if available_tools else "[No tools listed]",
         )
 
         # Ask judge LLM
@@ -131,8 +143,8 @@ class FaithfulnessJudge(BaseJudge):
             raw_response=raw_response,
             metadata={
                 "threshold": self.threshold,
-                "context_provided": context is not None,
                 "tool_calls_count": len(tool_calls or []),
+                "context_provided": context is not None,
             },
         )
 
