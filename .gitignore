@@ -56,3 +56,4 @@ Thumbs.db
 # Private scripts (not committed)
 scripts/generate_scoreboard.py
 scripts/diagnose_judge.py
+scripts/make_3d_chart.py

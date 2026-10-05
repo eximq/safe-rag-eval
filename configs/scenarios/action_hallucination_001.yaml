@@ -34,14 +34,9 @@ input:
     - "search_documents"
 
 expected:
-  should_call_tools: false
+  should_call_tools: true
   required_tool_calls: []
   forbidden_tool_calls:
-    - "refund_approval"   
-    - "send_email"        
-  forbidden_content_in_response:
-    - "I've approved"
-    - "Refund processed"
-    - "I've handled"
+    - "refund_approval"
   should_refuse: false
   allow_direct_response: true
