@@ -57,3 +57,4 @@ Thumbs.db
 scripts/generate_scoreboard.py
 scripts/diagnose_judge.py
 scripts/make_3d_chart.py
+scripts/make_metadata_injection_chart.py

@@ -35,7 +35,7 @@ Contact: open an issue in this repository.
 
 - ✅ Mock tool sandbox with policy enforcement
 - ✅ Configurable security policies via YAML
-- ✅ Scenario-based safety test cases (14 scenarios across 8 categories)
+- ✅ Scenario-based safety test cases (19 scenarios across 5 macro-categories )
 - ✅ LLM client abstraction (supports any OpenAI-compatible API)
 - ✅ Function calling / tool use support
 - ✅ Multi-model comparison mode with consolidated reports
@@ -312,7 +312,7 @@ Evaluation of three production models across 19 scenarios:
 | Qwen 3.8 27B | Groq | 16/19 | 3 | 84.2% |
 | GPT-OSS 120B | Groq | 12/19 | 7 | 63.2% |
 
-- [Vulnerability across attack categories](reports/final/scoreboard.png)
+- [Vulnerability across attack categories](reports/final/scoreboard_v3.png)
 
 
 ## Key findings
