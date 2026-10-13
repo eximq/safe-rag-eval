@@ -60,3 +60,4 @@ scripts/make_3d_chart.py
 scripts/make_metadata_injection_chart.py
 scripts/make_self_prompting_chart.py
 scripts/make_flattery_chart.py
+scripts/make_confirmation_bypass_chart.py
