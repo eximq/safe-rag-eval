@@ -411,3 +411,39 @@ Judge model: Qwen 3.8 27B.
 4. Infrastructure failures must be explicit, not silent passes
 5. Procedural violations require deterministic rules, not judge reasoning
 6. Provider-agnostic design (OpenAI-compatibility) enables rapid model testing
+
+## v3.7 | 19.10.26 (final synthesis)
+
+**Finding 50**: Aggregate failure pattern taxonomy
+- 4 distinct failure classes observed across 19 scenarios × 3 models:
+  1. **Universal vulnerabilities** (metadata injection) — all models fail identically; defense requires infrastructure-level controls
+  2. **Model-dependent strategies** (self-prompting, flattery) — three qualitatively different behaviors emerge; defense is a design choice
+  3. **Model-specific weaknesses** (flattery breaks Gemini, hallucination breaks GPT-OSS) — deployment-specific risk profile
+  4. **Procedural blind spots** (confirmation bypass) — judges miss, rules catch; hybrid evaluation mandatory
+- Implication: a single "safety score" collapses these four classes into a meaningless number; production guidance must be category-level
+
+**Finding 51**: Production safety checklist (derived from findings)
+- [ ] Document metadata sanitized or schema-validated before reaching LLM (Finding 26)
+- [ ] Sandbox enforces policy at tool-call level, logs intent even when blocked (Findings 27, 38)
+- [ ] Confirmation gates enforced by orchestration layer, not model self-restraint (Finding 40)
+- [ ] Destructive tools require explicit user confirmation regardless of urgency framing (Finding 39)
+- [ ] Evaluation pipeline runs both rules and judges, never judges alone (Findings 37, 46)
+- [ ] Model selection based on category-level profile, not aggregate pass rate (Finding 30)
+- [ ] Infrastructure failures fail loudly (judge_errors field), never silently pass (Finding 45)
+- [ ] Transparency is designed in (model_response not null for high-stakes actions), not assumed (Finding 49)
+
+**Finding 52**: Open science commitment
+- All artifacts public: framework code, 19 scenario YAMLs, per-model execution traces, judge reasoning, findings notes
+- Repository enables: independent replication, alternative judge re-scoring, scenario extension, model contribution via OpenAI-compatible endpoint
+- Paper in preparation for arXiv with full methodology, statistical discussion, and limitations
+- Implication: reproducible evaluation is a public good; closed-source benchmarks cannot be trusted
+
+**Finding 53**: Series narrative arc as methodological demonstration
+- Part 2 (metadata injection) showed a universal vulnerability
+- Part 3 (self-prompting) showed model-dependent strategies
+- Part 4 (flattery) showed model-specific failures + faithfulness ≠ safety
+- Part 5 (confirmation bypass) showed judges miss procedural violations
+- Part 6 (methodology) showed how the evaluation system itself evolved
+- Part 7 (this post) synthesizes into production guidance
+- Implication: each post built on the previous; the series is itself an iterative research artifact
+
