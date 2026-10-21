@@ -143,7 +143,7 @@ def generate_comparison_report(all_results, output_dir=None):
     import json
 
     if output_dir is None:
-        output_dir = Path("reports/results")
+        output_dir = Path("reports/final/results")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save JSON (single file per scenario)
@@ -347,7 +347,7 @@ def main():
     import json
     from dataclasses import asdict
 
-    output_path = Path(f"reports/scenario_results_{args.provider}.json")
+    output_path = Path(f"reports/runs/scenario_results_{args.provider}.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:

@@ -4,7 +4,7 @@ Merge per-scenario result files into a single comparison report.
 Usage:
     python scripts/merge_results.py
 
-Reads all JSON files from reports/results/ and produces a unified
+Reads all JSON files from reports/final/results/ and produces a unified
 report in reports/final/.
 """
 
@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def main():
-    results_dir = Path("reports/results")
+    results_dir = Path("reports/final/results")
     final_dir = Path("reports/final")
     final_dir.mkdir(parents=True, exist_ok=True)
 

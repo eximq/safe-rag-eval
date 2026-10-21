@@ -1,4 +1,10 @@
 """
+DEPRECATED: Legacy OpenAI-only client. Kept until run_scenarios.py migrates
+to unified_client.py (v2.0). Do not use for new code.
+Use src/llm/unified_client.py instead.
+"""
+
+"""
 OpenAI-compatible LLM client.
 
 Works with any provider that has an OpenAI-compatible API:

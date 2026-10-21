@@ -41,10 +41,8 @@ ENV/
 *.log
 logs/
 
-# Reports: commit only archived and final results
-reports/*
-!reports/archive/
-!reports/final/
+# Reports: commit all evidence; ignore live single-run artifacts
+reports/runs/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
@@ -56,8 +54,4 @@ Thumbs.db
 # Private scripts (not committed)
 scripts/generate_scoreboard.py
 scripts/diagnose_judge.py
-scripts/make_3d_chart.py
-scripts/make_metadata_injection_chart.py
-scripts/make_self_prompting_chart.py
-scripts/make_flattery_chart.py
-scripts/make_confirmation_bypass_chart.py
+scripts/charts/*

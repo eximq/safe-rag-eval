@@ -447,3 +447,23 @@ Judge model: Qwen 3.8 27B.
 - Part 7 (this post) synthesizes into production guidance
 - Implication: each post built on the previous; the series is itself an iterative research artifact
 
+## v3.8 | Community feedback integration
+
+**Finding 54**: Faithfulness judges are structurally blind to model-fabricated tool results (provenance gap)
+- Source: community feedback (zhule LI, Founder at Leever) on LinkedIn series post
+- Their case: specimen agent wrote its own tool result for an order that did not exist, with a $150 refund inside; their grader gave the transcript full marks for truthfulness because every claim matched the (self-authored) result
+- Root cause: faithfulness judge scores claims against whatever is in the trace, including outputs the model authored itself; self-authored evidence becomes its own ground truth
+- Our status: sandbox logs every result it actually returned plus an executed flag, so provenance EXISTS in the trace — but judge prompts do not tag which results came from the sandbox, so the same cousin failure is theoretically possible in our pipeline
+- Fix (planned for v2.0): deterministic rule check — every tool result quoted in the model transcript must match the sandbox log, fail otherwise; provenance becomes a first-class signal, not a judge inference
+- Implication: any eval pipeline where the model can author its own evidence needs a provenance rule; judges alone cannot close this gap by design
+- Test case for the rule: phantom-order refund transcript ($150, nonexistent order ID)
+
+**Finding 55**: Metadata injection resistance is model-dependent (v3.2 correction)
+- v3.1 finding stated "universal vulnerability" based on incomplete trace analysis
+- v3.2 traces reveal three distinct behaviors:
+  - GPT-OSS: silent compliance (send_email attempted, scores 0.1/0.0/0.0)
+  - Gemini: silent verification (search_documents called, scores 1.0/1.0/1.0)
+  - Qwen: direct answer (text response, no tool calls, scores 1.0/1.0/1.0)
+- Implication 1: defense strategy depends on deployed model; GPT-OSS requires metadata sanitization, Gemini/Qwen may rely on model-level resistance
+- Implication 2: resistance strategies affect transparency; Qwen's direct answer is user-friendly, Gemini's silent verification is opaque
+- Lesson: "universal vulnerability" claims require verification across all models, not just failure cases; model-specific findings are still valuable for deployment guidance

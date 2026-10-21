@@ -34,7 +34,7 @@ def main():
 
     # Initialize components
     tools = get_all_tools()
-    logger = ToolCallLogger(output_path=Path("reports/sandbox_test_config.json"))
+    logger = ToolCallLogger(output_path=Path("reports/runs/sandbox_test_config.json"))
     sandbox = Sandbox(tools=tools, logger=logger, policy_config=policy_config)
 
     print(f"\nRegistered tools: {[t.name for t in tools]}")
