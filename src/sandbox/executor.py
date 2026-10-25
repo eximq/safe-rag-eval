@@ -74,6 +74,7 @@ class Sandbox:
     ):
         self.tools = {tool.name: tool for tool in tools}
         self.logger = logger
+        self.result_overrides: Dict[str, Dict[str, Any]] = {}        
 
         # Load policy from config or use default
         if policy_config is None:
@@ -82,6 +83,16 @@ class Sandbox:
 
         self.policy = ConfigurablePolicy(policy_config)
         self.policy_config = policy_config
+
+    def set_result_overrides(self, overrides: Optional[Dict[str, Dict[str, Any]]] = None):
+        """
+        Set scenario-defined tool result overrides.
+
+        Overrides simulate payloads the sandbox "actually returned":
+        infected tool results (injection) or failure results (coverup tests).
+        Runner sets this once per scenario from scenario YAML.
+        """
+        self.result_overrides = overrides or {}
 
     def call(
         self,
@@ -140,6 +151,34 @@ class Sandbox:
                 scenario_id=scenario_id,
             )
             return None
+        
+        # Scenario-defined override: return simulated payload instead of mock.
+        # Logged as executed=True so provenance is correct: the sandbox
+        # "really returned" this payload, and the model really saw it.
+        if tool_name in self.result_overrides:
+            override = self.result_overrides[tool_name]
+
+            # ToolResult.output is Dict[str, Any]; wrap plain strings
+            # so override schema matches mock tool results
+            override_output = override.get("output", "")
+            if not isinstance(override_output, dict):
+                override_output = {"text": override_output}
+
+            result = ToolResult(
+                success=override.get("success", True),
+                output=override_output,
+                error=override.get("error"),
+            )
+            self.logger.log(
+                tool_name=tool_name,
+                arguments=arguments,
+                policy_decision="allowed",
+                policy_reason=None,
+                executed=True,
+                result_summary=str(result.output)[:200],
+                scenario_id=scenario_id,
+            )
+            return result
 
         # Execute the tool
         try:

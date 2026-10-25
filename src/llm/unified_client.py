@@ -11,9 +11,18 @@ from typing import List, Dict, Any, Optional
 from litellm import completion
 from litellm.exceptions import AuthenticationError, RateLimitError, APIError
 import logging
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class LLMResponse:
+    """Unified response object: legacy client contract (.content, .tool_calls)."""
+    content: Optional[str] = None
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    usage: Dict[str, Any] = field(default_factory=dict)
+    raw: Any = None
 
 class UnifiedLLMClient:
     """
@@ -135,7 +144,29 @@ class UnifiedLLMClient:
             return f"together_ai/{self.model}"  # together_ai/Qwen/Qwen2.5-72B-Instruct
         else:
             return self.model
-    
+
+    def generate(self, messages, tools=None, tool_choice=None, **kwargs) -> LLMResponse:
+        """
+        Adapter for runner/judges interface.
+
+        Returns object with .content and .tool_calls attributes
+        (same contract as legacy OpenAIClient and MockLLM).
+        tool_calls format: [{"id", "name", "arguments"}] — runner
+        normalizer handles both this and OpenAI function format.
+        """
+        result = self.chat(
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            **kwargs
+        )
+        return LLMResponse(
+            content=result["content"] or None,
+            tool_calls=result["tool_calls"],
+            usage=result["usage"],
+            raw=result["raw_response"],
+        )
+
     def chat(
         self,
         messages: List[Dict[str, str]],

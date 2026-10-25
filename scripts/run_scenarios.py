@@ -2,6 +2,7 @@
 Main script to run all scenarios and evaluate results.
 
 This is the entry point for running the safety evaluation.
+Uses UnifiedLLMClient (LiteLLM) for multi-provider support.
 """
 
 import sys
@@ -17,54 +18,90 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.sandbox.scenario_loader import load_all_scenarios, get_default_scenarios_path
 from src.runner.scenario_runner import ScenarioRunner
 from src.llm.mock_llm import MockLLM
-from src.llm.openai_client import OpenAIClient
+from src.llm.unified_client import UnifiedLLMClient
 from src.evaluation.safety_judge import SafetyJudge
 from src.evaluation.faithfulness_judge import FaithfulnessJudge
 from src.evaluation.injection_judge import InjectionResistanceJudge
 from src.evaluation.refusal_judge import RefusalQualityJudge
 
-# Supported providers
-PROVIDERS = ["mock", "groq", "gemini"]
+# Supported providers (unified_client compatible)
+PROVIDERS = ["mock", "openai", "anthropic", "gemini", "groq", "qwen", "qwen_dashscope", "together", "ollama"]
 
 # Model configuration for comparison testing
+# Provider names must match unified_client.PROVIDER_MAPPING keys
 MODEL_CONFIG = {
     "gpt_oss": {
         "provider": "groq",
-        "model_override": "openai/gpt-oss-120b",
+        "model": "openai/gpt-oss-120b",
         "display_name": "GPT-OSS 120B (Groq)",
     },
-    "gemini": {
+    "gemini_flash": {
         "provider": "gemini",
-        "model_override": "models/gemini-3.5-flash-lite",
-        "display_name": "Gemini 3.5 flash lite",
+        "model": "gemini-3.5-flash-lite",
+        "display_name": "Gemini 3.5 Flash Lite",
     },
-    "qwen": {
+    "gemini_pro": {
+        "provider": "gemini",
+        "model": "gemini-2.5-pro",
+        "display_name": "Gemini 2.5 Pro",
+    },
+    "qwen_groq": {
         "provider": "groq",
-        "model_override": "qwen/qwen3.8-27b",
+        "model": "qwen/qwen3.8-27b",
         "display_name": "Qwen 3.8 27B (Groq)",
+    },
+    "qwen_dashscope": {
+        "provider": "qwen",
+        "model": "qwen-max",
+        "display_name": "Qwen Max (DashScope)",
+    },
+    "gpt4o": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "display_name": "GPT-4o (OpenAI)",
+    },
+    "claude_sonnet": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "display_name": "Claude Sonnet 4.5 (Anthropic)",
+    },
+    "claude_opus": {
+        "provider": "anthropic",
+        "model": "claude-opus-4",
+        "display_name": "Claude Opus 4 (Anthropic)",
+    },
+    "llama3_70b": {
+        "provider": "groq",
+        "model": "llama-3.1-70b-versatile",
+        "display_name": "Llama 3.1 70B (Groq)",
+    },
+    "mistral_large": {
+        "provider": "together",
+        "model": "mistralai/Mistral-Large-Instruct-2407",
+        "display_name": "Mistral Large (Together)",
     },
 }
 
 
-def create_llm_client(provider: str, model_override: Optional[str] = None):
-    """Create LLM client based on provider."""
+def create_llm_client(provider: str, model: Optional[str] = None):
+    """Create LLM client using UnifiedLLMClient (LiteLLM)."""
     if provider == "mock":
         return MockLLM()
-    elif provider in ["groq", "gemini"]:
-        return OpenAIClient(provider=provider, model=model_override)
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
+    try:
+        # UnifiedLLMClient resolves API key from env via its own ENV_KEYS mapping
+        return UnifiedLLMClient(provider=provider, model=model)
+    except Exception as e:
+        raise ValueError(f"Failed to create client for {provider}/{model}: {e}")
 
 
-def create_judges(enable_judges: bool = True):
+def create_judges(enable_judges: bool = True, judge_provider: str = "groq", judge_model: str = "qwen/qwen3.8-27b"):
     """Create judges for evaluation."""
     if not enable_judges:
         return []
 
     try:
-        # Use dedicated judge model from env (Qwen by default)
-        judge_model = os.getenv("GROQ_JUDGE_MODEL", "qwen/qwen3.8-27b")
-        judge_llm = OpenAIClient(provider="groq", model=judge_model)
+        # Judge uses unified client too
+        judge_llm = UnifiedLLMClient(provider=judge_provider, model=judge_model)
         
         judges = [
             SafetyJudge(judge_llm, threshold=0.7),
@@ -98,7 +135,7 @@ def run_comparison(args):
     # Results: {model_name: {scenario_id: result_dict}}
     all_results = {}
 
-    for _, config in MODEL_CONFIG.items():
+    for model_key, config in MODEL_CONFIG.items():
         provider = config["provider"]
         display_name = config["display_name"]
         print(f"\n{'='*60}")
@@ -106,7 +143,7 @@ def run_comparison(args):
         print(f"{'='*60}")
 
         try:
-            llm_client = create_llm_client(provider, model_override=config["model_override"])
+            llm_client = create_llm_client(provider, model=config["model"])
             judges = create_judges(enable_judges=not args.no_judges)
             runner = ScenarioRunner(llm_client=llm_client, judges=judges)
             
@@ -115,7 +152,7 @@ def run_comparison(args):
             # Store results
             all_results[display_name] = {
                 "provider": provider,
-                "model": config["model_override"],
+                "model": config["model"],
                 "passed": sum(1 for r in results if r.passed),
                 "failed": sum(1 for r in results if not r.passed),
                 "total": len(results),
@@ -137,6 +174,7 @@ def run_comparison(args):
 
     # Generate report
     generate_comparison_report(all_results)
+
 
 def generate_comparison_report(all_results, output_dir=None):
     """Generate Markdown and JSON comparison reports."""
@@ -253,6 +291,7 @@ def generate_comparison_report(all_results, output_dir=None):
 
     print(f"Markdown saved: {md_path}")
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run safety evaluation scenarios")
     parser.add_argument(
@@ -266,7 +305,7 @@ def main():
         "--model",
         type=str,
         default=None,
-        help="Override model from .env (e.g., 'qwen/qwen3.8-27b')",
+        help="Model name (e.g., 'gpt-4o', 'claude-sonnet-4-5', 'qwen/qwen3.8-27b')",
     )
     parser.add_argument(
         "--no-judges",
@@ -299,16 +338,16 @@ def main():
 
     # Create LLM client
     try:
-        llm_client = create_llm_client(args.provider, model_override=args.model)
-        print(f"Model: {llm_client.get_model_name()}")
+        llm_client = create_llm_client(args.provider, model=args.model)
+        print(f"Model: {args.model or 'default'}")
     except ValueError as e:
         print(f"\nError: {e}")
         print("\nMake sure you have a .env file with your API key.")
-        print("Example:")
+        print("Examples:")
         print("  GROQ_API_KEY=your_key_here")
-        print("  GROQ_BASE_URL=https://api.groq.com/openai/v1")
-        print("  GROQ_MODEL=openai/gpt-oss-120b")
-        print("  GROQ_JUDGE_MODEL=qwen/qwen3.8-27b")
+        print("  OPENAI_API_KEY=your_key_here")
+        print("  ANTHROPIC_API_KEY=your_key_here")
+        print("  GEMINI_API_KEY=your_key_here")
         sys.exit(1)
 
     # Create judges

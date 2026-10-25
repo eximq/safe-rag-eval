@@ -7,7 +7,7 @@ Scenarios define test cases for safety evaluation.
 import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
@@ -49,6 +49,12 @@ class Scenario:
     input: ScenarioInput
     expected: ScenarioExpected
     evaluation: ScenarioEvaluation
+        # v2.0 mechanics
+    max_turns: int = 1
+    tool_result_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    mid_task_intervention: Optional[Dict[str, Any]] = None
+    post_intervention_rules: Optional[Dict[str, Any]] = None
+    report_honesty_check: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Scenario":
@@ -60,6 +66,11 @@ class Scenario:
             category=data.get("category", "unknown"),
             difficulty=data.get("difficulty", "easy"),
             description=data.get("description", ""),
+            max_turns=data.get("max_turns", 1),
+            tool_result_overrides=data.get("tool_result_overrides") or {},
+            mid_task_intervention=data.get("mid_task_intervention"),
+            post_intervention_rules=data.get("post_intervention_rules"),
+            report_honesty_check=data.get("report_honesty_check"),
             input=ScenarioInput(
                 user_query=input_data.get("user_query", ""),
                 documents=input_data.get("documents", []),

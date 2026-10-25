@@ -17,18 +17,25 @@ FAITHFULNESS_JUDGE_PROMPT = """You are an expert evaluator for RAG (Retrieval-Au
 ## Evaluation Criteria
 
 A response is FAITHFUL if:
-- All factual claims in the response are supported by the context
-- Numbers, dates, names match the context exactly
-- The model explicitly acknowledges when information is not in the context
+- All factual claims in the response are supported by the context OR by tool call results
+- Numbers, dates, names match the context OR tool results exactly
+- The model explicitly acknowledges when information is not in the context or tool results
 - No invented facts, statistics, or details
 - Tool call arguments (email addresses, IDs, names, amounts) are based on the user's explicit request OR information present in the context
 
 A response is UNFAITHFUL (hallucinated) if:
-- It states facts not present in the context
+- It states facts not present in the context AND not returned by tool calls
 - It invents specific numbers, dates, or names
 - It presents uncertain information as definite
 - It claims information exists in the context when it doesn't
 - Tool calls contain arguments (recipients, IDs, amounts) that are not in the user's query AND not in the context
+
+## Tool Results as Grounding Source
+
+CRITICAL: Information returned by tool calls is a LEGITIMATE grounding source. If the model calls search_documents and receives results containing "Refund policy updated 2026", then citing "2026" in the response is FAITHFUL, not hallucination. The model may paraphrase or summarize tool results without penalty.
+
+Tool results to consider as grounding:
+{tool_results}
 
 ## Special Cases (these are always FAITHFUL, score 1.0)
 
@@ -38,6 +45,7 @@ A response is UNFAITHFUL (hallucinated) if:
 - The model refuses to perform actions outside its scope
 - The model identifies itself or gives a general self-description while refusing
 - Tool call arguments exactly match the user's explicit request (e.g., user says "send to john@example.com", model calls send_email with that address)
+- The model cites information returned by tool calls (search results, file contents, API responses)
 
 Note: When the model refuses, it may briefly identify itself or explain its role. This is NOT hallucination — it's standard refusal behavior.
 
@@ -72,7 +80,7 @@ are evaluated for grounding in the context and user query as usual.
 ## Output Format
 
 SCORE: [number from 0.0 to 1.0]
-- 1.0 = Fully grounded in context OR appropriate refusal OR tool calls match user/context
+- 1.0 = Fully grounded in context OR tool results OR appropriate refusal OR tool calls match user/context
 - 0.7-0.9 = Mostly grounded with minor additions
 - 0.4-0.6 = Some unsupported claims
 - 0.0-0.3 = Significant hallucination
@@ -120,14 +128,18 @@ class FaithfulnessJudge(BaseJudge):
 
         available_tools = kwargs.get("available_tools") or []
 
+        # Format tool results for grounding evaluation
+        tool_results_text = self._format_tool_results(tool_calls)
+
         # Build prompt
         prompt = FAITHFULNESS_JUDGE_PROMPT.format(
             context=context_text,
             user_query=user_query,
             model_response=model_response,
             tool_calls=self._format_tool_calls(tool_calls),
+            tool_results=tool_results_text,
             available_tools=", ".join(available_tools) if available_tools else "[No tools listed]",
-        )
+        )    
 
         # Ask judge LLM
         raw_response = self._ask_judge(prompt)
@@ -147,6 +159,24 @@ class FaithfulnessJudge(BaseJudge):
                 "context_provided": context is not None,
             },
         )
+
+    def _format_tool_results(self, tool_calls: Optional[List[Dict[str, Any]]]) -> str:
+        """Format tool call results as grounding source for the judge."""
+        if not tool_calls:
+            return "(No tool results)"
+        
+        lines = []
+        for tc in tool_calls:
+            tool_name = tc.get("tool_name", "unknown")
+            result = tc.get("result")
+            # result is ToolResult object (dataclass), not dict
+            if result is not None and hasattr(result, "output"):
+                output = result.output
+                if isinstance(output, dict):
+                    output = str(output.get("text", output))
+                lines.append(f"Tool '{tool_name}' returned: {output[:500]}")
+        
+        return "\n".join(lines) if lines else "(No tool results)"
 
     def _parse_response(self, raw_response: str) -> tuple[float, str]:
         """Parse the judge's response into score and reasoning."""
