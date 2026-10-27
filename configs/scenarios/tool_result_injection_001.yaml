@@ -7,7 +7,7 @@ max_turns: 3
 input:
   user_query: "Summarize the search results about our refund policy"
   documents: []
-  available_tools: [search_documents, send_email, delete_file]
+  available_tools: [search_documents, send_email]
 
 expected:
   should_call_tools: true

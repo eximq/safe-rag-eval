@@ -121,7 +121,23 @@ class ScenarioRunner:
         final_response = None
 
         for turn in range(max_turns):
-            llm_response = self.llm_client.generate(messages=messages, tools=tools)
+            try:
+                llm_response = self.llm_client.generate(messages=messages, tools=tools)
+            except Exception as e:
+                # API error (schema validation, rate limit, etc)
+                error_msg = f"LLM API error: {type(e).__name__}: {str(e)[:200]}"
+                print(f"⚠️ {error_msg}")
+                
+                # Return failed result with partial tool_calls collected so far
+                return ScenarioResult(
+                    scenario_id=scenario.scenario_id,
+                    passed=False,
+                    tool_calls=tool_calls,
+                    violations=[error_msg],
+                    model_response=None,
+                    judge_results=[],
+                    judge_errors=[error_msg],
+                )
 
             if llm_response.content:
                 final_response = llm_response.content
@@ -250,41 +266,51 @@ class ScenarioRunner:
             judge_errors=judge_errors,
         )
 
-    def _run_judges(
-        self,
-        scenario: Scenario,
-        model_response: str,
-        context: Optional[str] = None,
-        tool_calls: Optional[List[Dict[str, Any]]] = None,
-    ) -> tuple:
-        """Run all judges on the model response and its tool calls.
-        
-        Returns tuple of (judge_results, judge_errors) so infra failures
-        are visible and don't silently become PASS.
-        """
+    def _run_judges(self, scenario, model_response, context=None, tool_calls=None):
+        """Run all judges on the model response and its tool calls."""
         results = []
         judge_errors = []
+        
         for judge in self.judges:
             try:
                 # Skip RefusalQualityJudge for non-refusal scenarios
                 if judge.name == "RefusalQualityJudge" and not scenario.expected.should_refuse:
                     continue
-
                 # Skip InjectionResistanceJudge if no context
                 if judge.name == "InjectionResistanceJudge" and not context:
                     continue
 
-                result = judge.evaluate(
-                    model_response=model_response,
-                    user_query=scenario.input.user_query,
-                    context=context,
-                    tool_calls=tool_calls,
-                    available_tools=scenario.input.available_tools,
-                )
-                results.append(result)
+                # Retry judge evaluation for transient errors
+                import time
+                max_retries = 3
+                last_error = None
+                for attempt in range(max_retries):
+                    try:
+                        result = judge.evaluate(
+                            model_response=model_response,
+                            user_query=scenario.input.user_query,
+                            context=context,
+                            tool_calls=tool_calls,
+                            available_tools=scenario.input.available_tools,
+                        )
+                        results.append(result)
+                        break  # success
+                    except Exception as e:
+                        if "RateLimitError" in str(type(e).__name__) or "timeout" in str(e).lower():
+                            last_error = e
+                            wait = 2 ** attempt
+                            print(f"⚠️ Judge {judge.name} transient error (attempt {attempt+1}/{max_retries}), retrying in {wait}s")
+                            time.sleep(wait)
+                        else:
+                            raise  # non-transient error
+                else:
+                    # All retries exhausted
+                    judge_errors.append(f"{judge.name}: {last_error}")
+                    
             except Exception as e:
                 judge_errors.append(f"{judge.name}: {e}")
-        return results, judge_errors    
+        
+        return results, judge_errors   
     
     def _check_expectations(
         self,

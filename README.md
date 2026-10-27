@@ -2,6 +2,17 @@
 
 Evaluation framework for hallucination and unauthorized action risk in RAG/agent LLM systems.
 
+> **🚧 Work in Progress**
+> 
+> System is being upgraded for a new test series:
+> - LiteLLM migration (7+ provider support)
+> - Multi-turn scenarios with real tool execution
+> - Statistical evaluation: N runs per scenario (mean/std/min/max)
+> - New attack types: tool result injection, coverup reporting, shutdown resistance
+> 
+> Some files and scenarios are under development.
+> Full documentation will be updated after the series is complete.
+
 ## Overview
 
 This project provides a comprehensive evaluation harness to assess:

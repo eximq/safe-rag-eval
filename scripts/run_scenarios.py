@@ -8,6 +8,7 @@ Uses UnifiedLLMClient (LiteLLM) for multi-provider support.
 import sys
 import os
 import argparse
+import time
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -25,10 +26,9 @@ from src.evaluation.injection_judge import InjectionResistanceJudge
 from src.evaluation.refusal_judge import RefusalQualityJudge
 
 # Supported providers (unified_client compatible)
-PROVIDERS = ["mock", "openai", "anthropic", "gemini", "groq", "qwen", "qwen_dashscope", "together", "ollama"]
+PROVIDERS = ["mock", "openai", "anthropic", "gemini", "groq", "qwen", "together", "ollama"]
 
 # Model configuration for comparison testing
-# Provider names must match unified_client.PROVIDER_MAPPING keys
 MODEL_CONFIG = {
     "gpt_oss": {
         "provider": "groq",
@@ -40,45 +40,10 @@ MODEL_CONFIG = {
         "model": "gemini-3.5-flash-lite",
         "display_name": "Gemini 3.5 Flash Lite",
     },
-    "gemini_pro": {
-        "provider": "gemini",
-        "model": "gemini-2.5-pro",
-        "display_name": "Gemini 2.5 Pro",
-    },
     "qwen_groq": {
         "provider": "groq",
         "model": "qwen/qwen3.8-27b",
         "display_name": "Qwen 3.8 27B (Groq)",
-    },
-    "qwen_dashscope": {
-        "provider": "qwen",
-        "model": "qwen-max",
-        "display_name": "Qwen Max (DashScope)",
-    },
-    "gpt4o": {
-        "provider": "openai",
-        "model": "gpt-4o",
-        "display_name": "GPT-4o (OpenAI)",
-    },
-    "claude_sonnet": {
-        "provider": "anthropic",
-        "model": "claude-sonnet-4-5",
-        "display_name": "Claude Sonnet 4.5 (Anthropic)",
-    },
-    "claude_opus": {
-        "provider": "anthropic",
-        "model": "claude-opus-4",
-        "display_name": "Claude Opus 4 (Anthropic)",
-    },
-    "llama3_70b": {
-        "provider": "groq",
-        "model": "llama-3.1-70b-versatile",
-        "display_name": "Llama 3.1 70B (Groq)",
-    },
-    "mistral_large": {
-        "provider": "together",
-        "model": "mistralai/Mistral-Large-Instruct-2407",
-        "display_name": "Mistral Large (Together)",
     },
 }
 
@@ -100,7 +65,6 @@ def create_judges(enable_judges: bool = True, judge_provider: str = "groq", judg
         return []
 
     try:
-        # Judge uses unified client too
         judge_llm = UnifiedLLMClient(provider=judge_provider, model=judge_model)
         
         judges = [
@@ -116,13 +80,69 @@ def create_judges(enable_judges: bool = True, judge_provider: str = "groq", judg
         return []
 
 
+def compute_aggregated_stats(all_runs_results):
+    """Compute aggregated statistics across all runs."""
+    from collections import defaultdict
+    import statistics
+    
+    scenario_scores = defaultdict(lambda: defaultdict(list))
+    scenario_pass_counts = defaultdict(lambda: {"passed": 0, "total": 0})
+    
+    for run_results in all_runs_results:
+        for result in run_results:
+            scenario_pass_counts[result.scenario_id]["total"] += 1
+            if result.passed:
+                scenario_pass_counts[result.scenario_id]["passed"] += 1
+            
+            for jr in result.judge_results:
+                scenario_scores[result.scenario_id][jr.judge_name].append(jr.score)
+    
+    stats = {}
+    for scenario_id in scenario_scores:
+        stats[scenario_id] = {
+            "pass_rate": scenario_pass_counts[scenario_id]["passed"] / scenario_pass_counts[scenario_id]["total"],
+            "passed": scenario_pass_counts[scenario_id]["passed"],
+            "total": scenario_pass_counts[scenario_id]["total"],
+            "judges": {},
+        }
+        for judge_name, scores in scenario_scores[scenario_id].items():
+            if len(scores) == 1:
+                stats[scenario_id]["judges"][judge_name] = {
+                    "mean": scores[0], "std": 0.0, "min": scores[0], "max": scores[0]
+                }
+            else:
+                stats[scenario_id]["judges"][judge_name] = {
+                    "mean": statistics.mean(scores),
+                    "std": statistics.stdev(scores),
+                    "min": min(scores),
+                    "max": max(scores),
+                }
+    
+    return stats
+
+
+def print_aggregated_stats(all_runs_results):
+    """Print mean/std/min/max scores across runs per scenario."""
+    stats = compute_aggregated_stats(all_runs_results)
+    
+    print("\n" + "=" * 80)
+    print("AGGREGATED STATISTICS (across all runs)")
+    print("=" * 80)
+    
+    for scenario_id in sorted(stats.keys()):
+        print(f"\n{scenario_id}:")
+        data = stats[scenario_id]
+        print(f"  Pass rate: {data['passed']}/{data['total']} ({data['pass_rate']*100:.0f}%)")
+        for judge_name, judge_stats in sorted(data["judges"].items()):
+            print(f"  {judge_name}: mean={judge_stats['mean']:.2f} ±{judge_stats['std']:.2f} (min={judge_stats['min']:.2f}, max={judge_stats['max']:.2f})")
+
+
 def run_comparison(args):
     """Run scenarios on all models and generate comparison table."""
     print("=" * 60)
     print("SafeRAG Eval - Multi-Model Comparison")
     print("=" * 60)
 
-    # Load scenarios once
     scenarios_path = get_default_scenarios_path()
     scenarios = load_all_scenarios(scenarios_path)
     
@@ -132,10 +152,9 @@ def run_comparison(args):
     print(f"Scenarios: {len(scenarios)}")
     print(f"Models: {len(MODEL_CONFIG)}")
 
-    # Results: {model_name: {scenario_id: result_dict}}
     all_results = {}
 
-    for model_key, config in MODEL_CONFIG.items():
+    for _, config in MODEL_CONFIG.items():
         provider = config["provider"]
         display_name = config["display_name"]
         print(f"\n{'='*60}")
@@ -149,7 +168,6 @@ def run_comparison(args):
             
             results = runner.run_all_scenarios(scenarios)
             
-            # Store results
             all_results[display_name] = {
                 "provider": provider,
                 "model": config["model"],
@@ -172,7 +190,6 @@ def run_comparison(args):
             print(f"⚠️ Error with {display_name}: {e}")
             all_results[display_name] = {"error": str(e)}
 
-    # Generate report
     generate_comparison_report(all_results)
 
 
@@ -184,13 +201,11 @@ def generate_comparison_report(all_results, output_dir=None):
         output_dir = Path("reports/final/results")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save JSON (single file per scenario)
     scenario_ids = set()
     for data in all_results.values():
         if "scenarios" in data:
             scenario_ids.update(data["scenarios"].keys())
 
-    # For single-scenario runs, use scenario name as filename
     if len(scenario_ids) == 1:
         scenario_id = next(iter(scenario_ids))
         json_path = output_dir / f"{scenario_id}.json"
@@ -202,13 +217,10 @@ def generate_comparison_report(all_results, output_dir=None):
         json.dump(all_results, f, indent=2)
     print(f"\nJSON saved: {json_path}")
 
-    # Generate Markdown (alongside JSON, same name)
     md_path = json_path.with_suffix(".md")
 
-    # Group scenarios by category
     scenarios_by_category = {}
     for scenario_id in sorted(scenario_ids):
-        # Category is the prefix before the first digit
         parts = scenario_id.rsplit("_", 1)
         category = parts[0] if len(parts) > 1 else "other"
         scenarios_by_category.setdefault(category, []).append(scenario_id)
@@ -218,10 +230,8 @@ def generate_comparison_report(all_results, output_dir=None):
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# LLM Safety Evaluation - Model Comparison\n\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
-        f.write(f"Judge model: Qwen 3.8 27B (Groq)\n\n")
         f.write("---\n\n")
 
-        # Summary table
         f.write("## Summary\n\n")
         f.write("| Model | Provider | Passed | Failed | Pass Rate |\n")
         f.write("| --- | --- | --- | --- | --- |\n")
@@ -238,56 +248,6 @@ def generate_comparison_report(all_results, output_dir=None):
             f.write(f"| {model_name} | {data['provider']} | {passed} | {failed} | {rate:.1f}% |\n")
 
         f.write("\n")
-
-        # Detailed results by category
-        f.write("## Detailed Results\n\n")
-
-        for category, scen_ids in sorted(scenarios_by_category.items()):
-            f.write(f"### {category.replace('_', ' ').title()}\n\n")
-
-            # Table header
-            header = "| Scenario |"
-            separator = "| --- |"
-            for model_name in models:
-                header += f" {model_name} |"
-                separator += " --- |"
-            f.write(header + "\n")
-            f.write(separator + "\n")
-
-            # Rows
-            for scenario_id in scen_ids:
-                row = f"| `{scenario_id}` |"
-                for model_name in models:
-                    scen_data = all_results[model_name]["scenarios"].get(scenario_id)
-                    if scen_data is None:
-                        row += " - |"
-                    elif scen_data["passed"]:
-                        row += " PASS |"
-                    else:
-                        row += " FAIL |"
-                f.write(row + "\n")
-
-            f.write("\n")
-
-        # Failure details
-        f.write("## Failure Details\n\n")
-        has_failures = False
-        for model_name, data in all_results.items():
-            if "error" in data:
-                continue
-            for sid, sd in data["scenarios"].items():
-                if not sd["passed"]:
-                    has_failures = True
-                    f.write(f"**{model_name}** on `{sid}`\n\n")
-                    if sd.get("violations"):
-                        for v in sd["violations"]:
-                            f.write(f"- {v}\n")
-                    scores = sd.get("judge_scores", {})
-                    if scores:
-                        f.write("- Judge scores: " + ", ".join(f"{k}={v:.2f}" for k, v in scores.items()) + "\n")
-                    f.write("\n")
-        if not has_failures:
-            f.write("No failures detected.\n\n")
 
     print(f"Markdown saved: {md_path}")
 
@@ -323,6 +283,18 @@ def main():
         action="store_true",
         help="Run tests on all configured models and generate comparison table",
     )
+    parser.add_argument(
+        "--n-runs",
+        type=int,
+        default=1,
+        help="Number of runs per scenario (default: 1 for backward compatibility)",
+    )
+    parser.add_argument(
+        "--delay",
+        type=int,
+        default=15,
+        help="Delay in seconds between runs (default: 15)",
+    )
     args = parser.parse_args()
 
     # Comparison mode
@@ -343,11 +315,6 @@ def main():
     except ValueError as e:
         print(f"\nError: {e}")
         print("\nMake sure you have a .env file with your API key.")
-        print("Examples:")
-        print("  GROQ_API_KEY=your_key_here")
-        print("  OPENAI_API_KEY=your_key_here")
-        print("  ANTHROPIC_API_KEY=your_key_here")
-        print("  GEMINI_API_KEY=your_key_here")
         sys.exit(1)
 
     # Create judges
@@ -372,27 +339,62 @@ def main():
             sys.exit(1)
         print(f"Running only scenario: {args.scenario}")
 
-    # Create runner with LLM client and judges
-    runner = ScenarioRunner(llm_client=llm_client, judges=judges)
+    # Run all scenarios (N times if requested)
+    print(f"\nRunning scenarios ({args.n_runs} run(s) per scenario)...")
+    all_runs_results = []
+    
+    for run_idx in range(args.n_runs):
+        if args.n_runs > 1:
+            print(f"\n--- Run {run_idx + 1}/{args.n_runs} ---")
+            if run_idx > 0:
+                print(f"Waiting {args.delay}s before next run...")
+                time.sleep(args.delay)
+        
+        runner = ScenarioRunner(llm_client=llm_client, judges=judges)
+        results = runner.run_all_scenarios(scenarios)
+        all_runs_results.append(results)
+        
+        if args.n_runs > 1:
+            runner.print_results(results)
 
-    # Run all scenarios
-    print("\nRunning scenarios...")
-    results = runner.run_all_scenarios(scenarios)
+    # Print results (use last run if single run mode)
+    if args.n_runs == 1:
+        runner.print_results(all_runs_results[0])
 
-    # Print results
-    runner.print_results(results)
-
-    # Save detailed results to file
+    # Build output data
     import json
     from dataclasses import asdict
 
+    output_data = {
+        "n_runs": args.n_runs,
+        "runs": [[asdict(r) for r in run_results] for run_results in all_runs_results],
+    }
+
+    # Add aggregated statistics if multiple runs
+    if args.n_runs > 1:
+        output_data["aggregated_stats"] = compute_aggregated_stats(all_runs_results)
+
+    # Save detailed results to file
     output_path = Path(f"reports/runs/scenario_results_{args.provider}.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump([asdict(r) for r in results], f, indent=2)
+        json.dump(output_data, f, indent=2)
 
     print(f"\nDetailed results saved to: {output_path}")
+
+    # Also save per-scenario file (for merge_results.py aggregation)
+    if args.scenario:
+        scenarios_dir = Path("reports/runs/scenarios")
+        scenarios_dir.mkdir(parents=True, exist_ok=True)
+        scenario_output_path = scenarios_dir / f"{args.scenario}_{args.provider}.json"
+        with open(scenario_output_path, "w", encoding="utf-8") as f:
+            json.dump(output_data, f, indent=2)
+        print(f"Per-scenario results saved to: {scenario_output_path}")
+    
+    # Print aggregated statistics if multiple runs
+    if args.n_runs > 1:
+        print_aggregated_stats(all_runs_results)
 
 
 if __name__ == "__main__":

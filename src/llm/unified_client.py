@@ -5,13 +5,25 @@ Supports: OpenAI, Anthropic, Google Gemini, Groq, Qwen (DashScope),
 """
 
 import os
-os.environ["NO_COLOR"] = "1"  # of ANSI color in LiteLLM
+os.environ["NO_COLOR"] = "1"  # Disable ANSI color in LiteLLM
 os.environ["LITELLM_LOG"] = "ERROR"  # show only error, no INFO
 from typing import List, Dict, Any, Optional
 from litellm import completion
-from litellm.exceptions import AuthenticationError, RateLimitError, APIError
+from litellm.exceptions import AuthenticationError, RateLimitError, APIError, Timeout, ServiceUnavailableError
 import logging
 from dataclasses import dataclass, field
+import time
+
+# Mapping from our provider names to LiteLLM provider identifiers
+LITELLM_PROVIDER_MAPPING = {
+    "groq": "groq",
+    "openai": "openai",
+    "anthropic": "anthropic",
+    "gemini": "gemini",
+    "qwen": "dashscope",  # Alibaba Cloud DashScope
+    "together": "together_ai",
+    "ollama": "ollama",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +35,7 @@ class LLMResponse:
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
     usage: Dict[str, Any] = field(default_factory=dict)
     raw: Any = None
+
 
 class UnifiedLLMClient:
     """
@@ -85,7 +98,6 @@ class UnifiedLLMClient:
             max_tokens: Max tokens in response
             timeout: Request timeout in seconds
         """
-
         self.provider = provider.lower()
         self.model = model
         self.api_key = api_key or self._get_api_key()
@@ -167,15 +179,9 @@ class UnifiedLLMClient:
             raw=result["raw_response"],
         )
 
-    def chat(
-        self,
-        messages: List[Dict[str, str]],
-        tools: Optional[List[Dict]] = None,
-        tool_choice: Optional[str] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
+    def chat(self, messages, tools=None, tool_choice=None, **kwargs):
         """
-        Send chat completion request.
+        Send chat completion request with retry logic for transient errors.
         
         Args:
             messages: List of message dicts with "role" and "content"
@@ -190,53 +196,58 @@ class UnifiedLLMClient:
                 - usage: dict with token counts
                 - raw_response: full LiteLLM response object
         """
-        try:
-            # Build request parameters
-            request_params = {
-                "model": self.model_id,
-                "messages": messages,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "timeout": self.timeout,
-                **kwargs
-            }
-            
-            # Add API key if provided
-            if self.api_key:
-                request_params["api_key"] = self.api_key
-            
-            # Add base URL if provided (for custom endpoints)
-            if self.base_url:
-                request_params["api_base"] = self.base_url
-            elif self.provider == "qwen":
-                # DashScope is OpenAI-compatible but lives at its own endpoint
-                request_params["api_base"] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-            
-            # Add tools if provided
-            if tools:
-                request_params["tools"] = tools
-                if tool_choice:
-                    request_params["tool_choice"] = tool_choice
-            
-            # Make request
-            logger.debug(f"Sending request to {self.provider}/{self.model}")
-            response = completion(**request_params)
-            
-            # Parse response
-            return self._parse_response(response)
-            
-        except AuthenticationError as e:
-            logger.error(f"Authentication failed for {self.provider}: {e}")
-            raise
-        except RateLimitError as e:
-            logger.warning(f"Rate limit hit for {self.provider}: {e}")
-            raise
-        except APIError as e:
-            logger.error(f"API error from {self.provider}: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error from {self.provider}: {e}")
-            raise
+        request_params = {
+            "model": self.model_id,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "timeout": self.timeout,
+            "custom_llm_provider": LITELLM_PROVIDER_MAPPING.get(self.provider, self.provider),
+            **kwargs,
+        }
+        
+        # Add API key if provided
+        if self.api_key:
+            request_params["api_key"] = self.api_key
+        
+        # Add base URL if provided (for custom endpoints)
+        if self.base_url:
+            request_params["api_base"] = self.base_url
+        elif self.provider == "qwen":
+            # DashScope is OpenAI-compatible but lives at its own endpoint
+            request_params["api_base"] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        
+        # Add tools if provided
+        if tools:
+            request_params["tools"] = tools
+            if tool_choice:
+                request_params["tool_choice"] = tool_choice
+        
+        # Retry with exponential backoff for transient errors
+        max_retries = 3
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                logger.debug(f"Sending request to {self.provider}/{self.model} (attempt {attempt+1}/{max_retries})")
+                response = completion(**request_params)
+                return self._parse_response(response)
+            except (RateLimitError, Timeout, ServiceUnavailableError) as e:
+                last_error = e
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                print(f"⚠️ Transient error (attempt {attempt+1}/{max_retries}), retrying in {wait}s: {type(e).__name__}")
+                time.sleep(wait)
+            except AuthenticationError as e:
+                logger.error(f"Authentication failed for {self.provider}: {e}")
+                raise
+            except APIError as e:
+                logger.error(f"API error from {self.provider}: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Unexpected error from {self.provider}: {e}")
+                raise
+        
+        # All retries exhausted
+        raise last_error
     
     def _parse_response(self, response) -> Dict[str, Any]:
         """Parse LiteLLM response into unified format."""
@@ -359,61 +370,6 @@ if __name__ == "__main__":
         )
         response = client_groq.chat(
             messages=[{"role": "user", "content": "Say hello in one word"}],
-            max_tokens=10
-        )
-        print(f"✓ Response: {response['content']}")
-    except Exception as e:
-        print(f"✗ Error: {e}")
-    
-    # Example 4: Qwen via DashScope (Alibaba Cloud)
-    print("\n4. Qwen via DashScope (Alibaba Cloud)")
-    print("-" * 60)
-    try:
-        client_qwen = UnifiedLLMClient(
-            provider="qwen",
-            model="qwen-max",  # or qwen-plus, qwen-turbo
-            api_key=os.getenv("DASHSCOPE_API_KEY", "placeholder-key")
-        )
-        response = client_qwen.chat(
-            messages=[{"role": "user", "content": "Hello"}],
-            max_tokens=10
-        )
-        print(f"✓ Response: {response['content']}")
-    except AuthenticationError:
-        print("✓ Client structure works (auth failed as expected with placeholder)")
-    except Exception as e:
-        print(f"✗ Error: {e}")
-    
-    # Example 5: Qwen via Together AI
-    print("\n5. Qwen via Together AI")
-    print("-" * 60)
-    try:
-        client_together = UnifiedLLMClient(
-            provider="together",
-            model="Qwen/Qwen2.5-72B-Instruct",
-            api_key=os.getenv("TOGETHER_API_KEY", "placeholder-key")
-        )
-        response = client_together.chat(
-            messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=10
-        )
-        print(f"✓ Response: {response['content']}")
-    except AuthenticationError:
-        print("✓ Client structure works (auth failed as expected with placeholder)")
-    except Exception as e:
-        print(f"✗ Error: {e}")
-    
-    # Example 6: Local Qwen via Ollama
-    print("\n6. Local Qwen via Ollama")
-    print("-" * 60)
-    print("Requires: ollama pull qwen2.5:7b")
-    try:
-        client_ollama = UnifiedLLMClient(
-            provider="ollama",
-            model="qwen2.5:7b"
-        )
-        response = client_ollama.chat(
-            messages=[{"role": "user", "content": "Hello"}],
             max_tokens=10
         )
         print(f"✓ Response: {response['content']}")
