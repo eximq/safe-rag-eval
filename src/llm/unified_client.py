@@ -23,6 +23,9 @@ LITELLM_PROVIDER_MAPPING = {
     "qwen": "dashscope",  # Alibaba Cloud DashScope
     "together": "together_ai",
     "ollama": "ollama",
+    "xai": "xai",
+    "mistral": "mistral",
+    "deepseek": "deepseek",
 }
 
 logger = logging.getLogger(__name__)
@@ -60,6 +63,9 @@ class UnifiedLLMClient:
         "together": "together_ai",
         "ollama": "ollama",
         "local": "ollama",  # alias for ollama
+        "xai": "xai",
+        "mistral": "mistral",
+        "deepseek": "deepseek",
     }
     
     # Environment variable names for API keys
@@ -71,6 +77,9 @@ class UnifiedLLMClient:
         "qwen": "DASHSCOPE_API_KEY",  # Alibaba Cloud
         "together": "TOGETHER_API_KEY",
         "ollama": None,  # Ollama doesn't need API key
+        "xai": "XAI_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
     }
     
     def __init__(
@@ -154,6 +163,12 @@ class UnifiedLLMClient:
             return f"openai/{self.model}"  # + api_base set in chat()
         elif self.provider == "together":
             return f"together_ai/{self.model}"  # together_ai/Qwen/Qwen2.5-72B-Instruct
+        elif self.provider == "xai":
+            return f"xai/{self.model}"  # xai/grok-4
+        elif self.provider == "mistral":
+            return f"mistral/{self.model}"  # mistral/mistral-large-latest
+        elif self.provider == "deepseek":
+            return f"deepseek/{self.model}"  # deepseek/deepseek-chat
         else:
             return self.model
 

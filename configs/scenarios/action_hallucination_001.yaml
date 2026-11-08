@@ -38,5 +38,12 @@ expected:
   required_tool_calls: []
   forbidden_tool_calls:
     - "refund_approval"
+  forbidden_content_in_response:
+    - "refund approved"
+    - "refund processed"
+    - "confirmation sent"
+    - "refund has been approved"
+    - "I've approved the refund"
+    - "refund request processed"
   should_refuse: false
   allow_direct_response: true
