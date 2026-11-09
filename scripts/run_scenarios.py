@@ -6,7 +6,6 @@ Uses UnifiedLLMClient (LiteLLM) for multi-provider support.
 """
 
 import sys
-import os
 import argparse
 import time
 from pathlib import Path
@@ -109,7 +108,7 @@ def compute_aggregated_stats(all_runs_results):
     stats = {}
     for scenario_id in scenario_scores:
         stats[scenario_id] = {
-            "pass_rate": scenario_pass_counts[scenario_id]["passed"] / scenario_pass_counts[scenario_id]["total"],
+            "pass_rate": round(scenario_pass_counts[scenario_id]["passed"] / scenario_pass_counts[scenario_id]["total"], 3),
             "passed": scenario_pass_counts[scenario_id]["passed"],
             "total": scenario_pass_counts[scenario_id]["total"],
             "judges": {},
@@ -117,14 +116,17 @@ def compute_aggregated_stats(all_runs_results):
         for judge_name, scores in scenario_scores[scenario_id].items():
             if len(scores) == 1:
                 stats[scenario_id]["judges"][judge_name] = {
-                    "mean": scores[0], "std": 0.0, "min": scores[0], "max": scores[0]
+                    "mean": round(scores[0], 3),
+                    "std": 0.0,
+                    "min": round(scores[0], 3),
+                    "max": round(scores[0], 3)
                 }
             else:
                 stats[scenario_id]["judges"][judge_name] = {
-                    "mean": statistics.mean(scores),
-                    "std": statistics.stdev(scores),
-                    "min": min(scores),
-                    "max": max(scores),
+                    "mean": round(statistics.mean(scores), 3),
+                    "std": round(statistics.stdev(scores), 3),
+                    "min": round(min(scores), 3),
+                    "max": round(max(scores), 3),
                 }
     
     return stats
@@ -233,9 +235,7 @@ def generate_comparison_report(all_results, output_dir=None):
         parts = scenario_id.rsplit("_", 1)
         category = parts[0] if len(parts) > 1 else "other"
         scenarios_by_category.setdefault(category, []).append(scenario_id)
-
-    models = [name for name in all_results.keys() if "error" not in all_results[name]]
-
+  
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# LLM Safety Evaluation - Model Comparison\n\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
@@ -383,18 +383,25 @@ def main():
     if args.n_runs == 1:
         runner.print_results(all_runs_results[0])
 
-    # Build output data
+    # Build output data with metadata
     import json
     from dataclasses import asdict
+    from datetime import datetime
 
     output_data = {
-        "n_runs": args.n_runs,
+        "metadata": {
+            "provider": args.provider,
+            "model": args.model,
+            "judge_provider": args.judge_provider,
+            "judge_model": args.judge_model,
+            "timestamp": datetime.now().isoformat(),
+            "n_runs": args.n_runs,
+        },
         "runs": [[asdict(r) for r in run_results] for run_results in all_runs_results],
     }
 
-    # Add aggregated statistics if multiple runs
-    if args.n_runs > 1:
-        output_data["aggregated_stats"] = compute_aggregated_stats(all_runs_results)
+    # Add aggregated statistics (always, even for single run)
+    output_data["aggregated_stats"] = compute_aggregated_stats(all_runs_results)
 
     # Save detailed results to file
     output_path = Path(f"reports/runs/scenario_results_{args.provider}.json")
@@ -406,6 +413,8 @@ def main():
     print(f"\nDetailed results saved to: {output_path}")
 
     # Also save per-scenario file (for merge_results.py aggregation)
+    # Note: scenario_results_{provider}.json is overwritten each run (latest state)
+    #       scenarios/{scenario}_{provider}.json is per-scenario history (not overwritten)
     if args.scenario:
         scenarios_dir = Path("reports/runs/scenarios")
         scenarios_dir.mkdir(parents=True, exist_ok=True)

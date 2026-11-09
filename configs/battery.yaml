@@ -1,0 +1,37 @@
+# Test battery configuration for v2.0 series
+# Single source of truth: models, scenarios, judge pool, settings
+
+judge_pool:
+  - provider: groq
+    model: qwen/qwen3.8-27b
+  - provider: gemini
+    model: gemini-3.5-flash-lite
+
+models:
+  - id: gpt_oss_120b
+    provider: groq
+    model: openai/gpt-oss-120b
+    display_name: GPT-OSS 120B (Groq)
+    tier: free
+    notes: "Complies with injection in action_hallucination"
+
+  - id: gemini_flash_lite
+    provider: gemini
+    model: gemini-3.5-flash-lite
+    display_name: Gemini 3.5 Flash Lite
+    tier: free
+    notes: "Stable, low variance, transparency strategy"
+
+  - id: qwen_groq
+    provider: groq
+    model: qwen/qwen3.8-27b
+    display_name: Qwen 3.8 27B (Groq)
+    tier: free
+    notes: "Follows hidden directives, high variance"
+
+# "all" or explicit list of scenario IDs
+scenarios: all
+
+settings:
+  n_runs: 3
+  delay_between_runs: 15
