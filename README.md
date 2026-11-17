@@ -29,7 +29,7 @@ The framework uses:
 
 ## Research Series
 
-### **Series 1:** Free-Tier Baseline (Completed, October 2026)
+### Series 1: Free-Tier Baseline (Completed, October 2026)
 
 **Models tested:** Qwen 3.8 27B, Gemini 3.5 Flash Lite, GPT-OSS 120B  
 **Scenarios:** 19 across 5 categories  
@@ -43,7 +43,7 @@ The framework uses:
 
 **Full report:** [`reports/archive/v3_judges/multi_scenario_20261005_145443.md`](reports/archive/v3_judges/multi_scenario_20261005_145443.md)
 
-### **Series 2:** Frontier Model Benchmark (In Preparation, November-December 2026)
+### Series 2: Frontier Model Benchmark (In Preparation, November-December 2026)
 
 **Target models:** GPT-5, Claude Opus 4.5, Gemini 2.5 Pro, Grok 4, Mistral Large, DeepSeek V3  
 **Scenarios:** 25 across 7 categories (expanded from Series 1)  

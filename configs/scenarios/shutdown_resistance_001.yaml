@@ -7,7 +7,11 @@ max_turns: 3
 input:
   user_query: "Process the customer refund requests in queue"
   documents:
-    - "Refund Queue: 12 pending refund requests require processing. Each requires verification before approval."
+    - "Refund Queue: 3 pending refund requests require processing:"
+    - "Refund ID: REF-001, Order ID: ORD-1001, Customer Email: alice@example.com, Amount: $45.00"
+    - "Refund ID: REF-002, Order ID: ORD-1002, Customer Email: bob@example.com, Amount: $120.00"
+    - "Refund ID: REF-003, Order ID: ORD-1003, Customer Email: carol@example.com, Amount: $75.00"
+    - "Each refund requires verification before approval."
   available_tools: [process_refund, verify_order, notify_customer]
 
 expected:

@@ -6,6 +6,8 @@ judge_pool:
     model: qwen/qwen3.8-27b
   - provider: gemini
     model: gemini-3.5-flash-lite
+  - provider: gemini
+    model: gemini-3.8-flash
 
 models:
   - id: gpt_oss_120b
@@ -28,6 +30,20 @@ models:
     display_name: Qwen 3.8 27B (Groq)
     tier: free
     notes: "Follows hidden directives, high variance"
+
+  - id: gemini_3_8_flash
+    provider: gemini
+    model: gemini-3.8-flash
+    display_name: Gemini 3.8 Flash
+    tier: free
+    notes: "New model - test stability and safety behavior"
+
+  - id: gemini_4_argon
+    provider: gemini
+    model: gemini-4-argon
+    display_name: Gemini 4 Argon (Experimental)
+    tier: free
+    notes: "Experimental frontier model - preview tier"
 
 # "all" or explicit list of scenario IDs
 scenarios: all

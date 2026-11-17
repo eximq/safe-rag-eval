@@ -88,6 +88,23 @@ def create_judges(enable_judges: bool = True, judge_provider: str = "groq", judg
         return []
 
 
+def auto_select_judge(candidate_provider: str, candidate_model: str):
+    """Auto-select a different judge to avoid candidate/judge collision."""
+    # Judge pool with fallbacks
+    judge_pool = [
+        ("gemini", "gemini-3.5-flash-lite"),
+        ("groq", "qwen/qwen3.8-27b"),
+        ("gemini", "gemini-3.8-flash"),
+    ]
+    
+    for provider, model in judge_pool:
+        if provider != candidate_provider or model != candidate_model:
+            return provider, model
+    
+    # Fallback if all pool items match (shouldn't happen)
+    return "gemini", "gemini-3.5-flash-lite"
+
+
 def compute_aggregated_stats(all_runs_results):
     """Compute aggregated statistics across all runs."""
     from collections import defaultdict
@@ -263,60 +280,15 @@ def generate_comparison_report(all_results, output_dir=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Run safety evaluation scenarios")
-    parser.add_argument(
-        "--provider",
-        type=str,
-        default="mock",
-        choices=PROVIDERS,
-        help="LLM provider to use",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=None,
-        help="Model name (e.g., 'gpt-4o', 'claude-sonnet-4-5', 'qwen/qwen3.8-27b')",
-    )
-    parser.add_argument(
-        "--no-judges",
-        action="store_true",
-        help="Disable LLM-as-Judge evaluation",
-    )
-    parser.add_argument(
-        "--scenario",
-        type=str,
-        default=None,
-        help="Run a specific scenario by ID (default: all scenarios)",
-    )
-    parser.add_argument(
-        "--all-models",
-        action="store_true",
-        help="Run tests on all configured models and generate comparison table",
-    )
-    parser.add_argument(
-        "--n-runs",
-        type=int,
-        default=1,
-        help="Number of runs per scenario (default: 1 for backward compatibility)",
-    )
-    parser.add_argument(
-        "--delay",
-        type=int,
-        default=15,
-        help="Delay in seconds between runs (default: 15)",
-    )
-    parser.add_argument(
-        "--judge-provider",
-        type=str,
-        default="groq",
-        choices=PROVIDERS,
-        help="Provider for judge LLM (default: groq)",
-    )
-    parser.add_argument(
-        "--judge-model",
-        type=str,
-        default="qwen/qwen3.8-27b",
-        help="Model for judge LLM (default: qwen/qwen3.8-27b)",
-    )
+    parser.add_argument("--provider", type=str, default="mock", choices=PROVIDERS, help="LLM provider to use")
+    parser.add_argument("--model", type=str, default=None, help="Model name")
+    parser.add_argument("--no-judges", action="store_true", help="Disable LLM-as-Judge evaluation")
+    parser.add_argument("--scenario", type=str, default=None, help="Run a specific scenario by ID")
+    parser.add_argument("--all-models", action="store_true", help="Run tests on all configured models")
+    parser.add_argument("--n-runs", type=int, default=3, help="Number of runs per scenario (default: 3 for Series 2)")
+    parser.add_argument("--delay", type=int, default=15, help="Delay in seconds between runs (default: 15)")
+    parser.add_argument("--judge-provider", type=str, default="gemini", choices=PROVIDERS, help="Provider for judge LLM (default: gemini)")
+    parser.add_argument("--judge-model", type=str, default="gemini-3.5-flash-lite", help="Model for judge LLM (default: gemini-3.5-flash-lite)")
     args = parser.parse_args()
 
     # Comparison mode
@@ -339,17 +311,24 @@ def main():
         print("\nMake sure you have a .env file with your API key.")
         sys.exit(1)
 
-    # Create judges
+    # Create judges with auto-selection if not explicitly specified
+    judge_provider = args.judge_provider
+    judge_model = args.judge_model
+    
+    # Auto-select judge if it matches candidate
+    if judge_provider == args.provider and judge_model == args.model:
+        judge_provider, judge_model = auto_select_judge(args.provider, args.model)
+        print(f"⚠️  Judge matched candidate, auto-switched to: {judge_provider}/{judge_model}")
+    
     judges = create_judges(
         enable_judges=not args.no_judges,
-        judge_provider=args.judge_provider,
-        judge_model=args.judge_model,
-    )    
+        judge_provider=judge_provider,
+        judge_model=judge_model,
+    )
 
     # Load scenarios
     scenarios_path = get_default_scenarios_path()
     print(f"\nLoading scenarios from: {scenarios_path}")
-
     scenarios = load_all_scenarios(scenarios_path)
     print(f"Loaded {len(scenarios)} scenarios")
 
@@ -386,39 +365,38 @@ def main():
     # Build output data with metadata
     import json
     from dataclasses import asdict
-    from datetime import datetime
 
     output_data = {
         "metadata": {
             "provider": args.provider,
             "model": args.model,
-            "judge_provider": args.judge_provider,
-            "judge_model": args.judge_model,
+            "judge_provider": judge_provider,
+            "judge_model": judge_model,
             "timestamp": datetime.now().isoformat(),
             "n_runs": args.n_runs,
         },
         "runs": [[asdict(r) for r in run_results] for run_results in all_runs_results],
     }
 
-    # Add aggregated statistics (always, even for single run)
+    # Add aggregated statistics
     output_data["aggregated_stats"] = compute_aggregated_stats(all_runs_results)
 
-    # Save detailed results to file
-    output_path = Path(f"reports/runs/scenario_results_{args.provider}.json")
+    # Save detailed results
+    # Sanitize model name for filename (replace / and special chars)
+    safe_model = (args.model or "default").replace("/", "_").replace(":", "_")
+
+    output_path = Path(f"reports/runs/scenario_results_{args.provider}_{safe_model}.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2)
-
     print(f"\nDetailed results saved to: {output_path}")
 
-    # Also save per-scenario file (for merge_results.py aggregation)
-    # Note: scenario_results_{provider}.json is overwritten each run (latest state)
-    #       scenarios/{scenario}_{provider}.json is per-scenario history (not overwritten)
+    # Save per-scenario file
     if args.scenario:
         scenarios_dir = Path("reports/runs/scenarios")
         scenarios_dir.mkdir(parents=True, exist_ok=True)
-        scenario_output_path = scenarios_dir / f"{args.scenario}_{args.provider}.json"
+        scenario_output_path = scenarios_dir / f"{args.scenario}_{args.provider}_{safe_model}.json"
         with open(scenario_output_path, "w", encoding="utf-8") as f:
             json.dump(output_data, f, indent=2)
         print(f"Per-scenario results saved to: {scenario_output_path}")

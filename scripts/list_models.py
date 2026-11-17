@@ -20,14 +20,42 @@ load_dotenv()
 
 # Provider configuration
 PROVIDERS = {
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "env_key": "OPENAI_API_KEY",
+    },
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
         "env_key": "GROQ_API_KEY",
     },
-    "gemini": {
+    "gemini": {  # Google AI Studio
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "env_key": "GEMINI_API_KEY",
     },
+    "vertex_ai": {  # Google Cloud $300 bon
+        "base_url": "https://REGION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/REGION/endpoints/public/models/MODEL_ID:rawPredict",
+        "env_key": "VERTEX_AI_CREDENTIALS",  # JSON w credentials
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "env_key": "DEEPSEEK_API_KEY",
+    },
+    # "mistral": {  
+    #     "base_url": "https://api.mistral.ai/v1",
+    #     "env_key": "MISTRAL_API_KEY",
+    # },
+    # "xai": {
+    #     "base_url": "https://api.x.ai/v1",
+    #     "env_key": "XAI_API_KEY",
+    # },
+    # "alibaba": {
+    #     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    #     "env_key": "DASHSCOPE_API_KEY",
+    # },
+    # "meta": {  # Llama API
+    #     "base_url": "https://api.llama.com/v1",
+    #     "env_key": "META_API_KEY",
+    # },
 }
 
 
